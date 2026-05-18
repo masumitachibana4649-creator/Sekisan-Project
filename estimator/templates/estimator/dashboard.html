@@ -1,0 +1,67 @@
+{% extends "estimator/base.html" %}
+{% block title %}ダッシュボード | 壁紙積算システム{% endblock %}
+
+{% block content %}
+<section class="workbench">
+  <div class="workbench-main">
+    <div class="page-kicker">PDF図面 / 部屋入力 / 自動積算</div>
+    <h1>壁紙の必要面積とロール本数を、その場で積算</h1>
+    <div class="metric-strip">
+      <div>
+        <span class="metric-label">案件数</span>
+        <strong>{{ projects|length }}</strong>
+      </div>
+      <div>
+        <span class="metric-label">最新ロール</span>
+        <strong>{% if latest %}{{ latest.total_rolls }}本{% else %}0本{% endif %}</strong>
+      </div>
+      <div>
+        <span class="metric-label">CSV出力</span>
+        <strong>対応</strong>
+      </div>
+    </div>
+    <a class="primary-action" href="{% url 'project_create' %}">積算を開始</a>
+  </div>
+  <aside class="drawing-panel" aria-label="図面プレビュー">
+    <div class="plan-card">
+      <div class="room-shape living">LDK</div>
+      <div class="room-shape hall">廊下</div>
+      <div class="room-shape bed">洋室</div>
+      <div class="room-shape bath">洗面</div>
+      <div class="measure horizontal">7.2m</div>
+      <div class="measure vertical">2.4m</div>
+    </div>
+  </aside>
+</section>
+
+<section class="content-band two-column">
+  <div>
+    <div class="section-heading">
+      <h2>最近の積算</h2>
+      <a href="{% url 'project_create' %}">新規作成</a>
+    </div>
+    <div class="project-list">
+      {% for project in projects %}
+        <a class="project-row" href="{% url 'project_detail' project.pk %}">
+          <span>
+            <strong>{{ project.name }}</strong>
+            <small>{{ project.client_name|default:"顧客名未設定" }} / {{ project.updated_at|date:"Y/m/d H:i" }}</small>
+          </span>
+          <span class="row-total">{{ project.total_rolls }}本</span>
+        </a>
+      {% empty %}
+        <div class="empty-state">
+          <strong>積算データはまだありません</strong>
+          <span>最初の案件を作成してください。</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <aside class="ad-slot">
+    <span>AD</span>
+    <strong>内装資材・施工道具</strong>
+    <p>広告枠サンプル</p>
+  </aside>
+</section>
+{% endblock %}

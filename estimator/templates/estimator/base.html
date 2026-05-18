@@ -1,0 +1,36 @@
+{% load static %}
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}壁紙積算システム{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'estimator/styles.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'dashboard' %}">
+      <span class="brand-mark">W</span>
+      <span>壁紙積算システム</span>
+    </a>
+    <nav class="top-actions">
+      <a class="icon-link" href="{% url 'project_create' %}" aria-label="新規積算">＋ 新規積算</a>
+      <a class="icon-link ghost" href="/admin/" aria-label="管理">管理</a>
+    </nav>
+  </header>
+
+  {% if messages %}
+    <div class="messages">
+      {% for message in messages %}
+        <p class="message {{ message.tags }}">{{ message }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{% static 'estimator/app.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+<select name="{{ name }}">
+  {% for choice in page_choices %}
+    <option value="{{ choice }}"{% if choice == selected %} selected{% endif %}>{{ choice }}</option>
+  {% endfor %}
+</select>

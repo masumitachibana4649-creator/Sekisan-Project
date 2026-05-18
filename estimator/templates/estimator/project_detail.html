@@ -1,0 +1,68 @@
+{% extends "estimator/base.html" %}
+{% block title %}{{ project.name }} | 壁紙積算システム{% endblock %}
+
+{% block content %}
+<section class="result-hero">
+  <div>
+    <div class="page-kicker">積算結果</div>
+    <h1>{{ project.name }}</h1>
+    <p>{{ project.client_name|default:"顧客名未設定" }}</p>
+  </div>
+  <div class="result-actions">
+    <a class="secondary-action" href="{% url 'project_create' %}">新規積算</a>
+    <a class="primary-action" href="{% url 'project_csv' project.pk %}">CSV出力</a>
+  </div>
+</section>
+
+<section class="summary-grid">
+  <div><span>必要面積</span><strong>{{ project.total_area|floatformat:2 }} m2</strong></div>
+  <div><span>ロール本数</span><strong>{{ project.total_rolls }} 本</strong></div>
+  <div><span>概算金額</span><strong>{{ project.total_cost }} 円</strong></div>
+  <div><span>ロス率</span><strong>{{ project.loss_rate_percent }}%</strong></div>
+</section>
+
+<section class="content-band">
+  <div class="section-heading">
+    <h2>部屋別明細</h2>
+    {% if project.drawing_pdf %}
+      <a href="{{ project.drawing_pdf.url }}">PDFを開く</a>
+    {% endif %}
+  </div>
+  {% if project.memo %}
+    <p class="memo-box">{{ project.memo|linebreaksbr }}</p>
+  {% endif %}
+  {% if project.drawing_pdf %}
+    <div class="page-map-summary">
+      <span>1F平面図: {{ project.page_1f_plan }}</span>
+      <span>2F平面図: {{ project.page_2f_plan }}</span>
+      <span>3F平面図: {{ project.page_3f_plan }}</span>
+      <span>東側立面図: {{ project.page_east_elevation }}</span>
+      <span>西側立面図: {{ project.page_west_elevation }}</span>
+      <span>南側立面図: {{ project.page_south_elevation }}</span>
+      <span>北側立面図: {{ project.page_north_elevation }}</span>
+      <span>断面図: {{ project.page_section }}</span>
+    </div>
+  {% endif %}
+  <div class="result-table">
+    <div class="result-head">
+      <span>部屋名</span><span>壁面</span><span>天井</span><span>必要面積</span><span>本数</span><span>備考</span>
+    </div>
+    {% for room in rooms %}
+      <div class="result-row">
+        <strong>{{ room.name }}</strong>
+        <span>{{ room.wall_area|floatformat:2 }} m2</span>
+        <span>{{ room.ceiling_area_m2 }} m2</span>
+        <span>{{ room.total_area|floatformat:2 }} m2</span>
+        <span>{{ room.rolls_required }} 本</span>
+        <span>{{ room.note|default:"-" }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<aside class="ad-slot wide-ad">
+  <span>AD</span>
+  <strong>壁紙・糊・施工工具の広告枠</strong>
+  <p>積算計算時に表示する収益化スペース</p>
+</aside>
+{% endblock %}
