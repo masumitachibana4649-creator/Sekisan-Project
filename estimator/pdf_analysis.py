@@ -60,17 +60,15 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
 
 def _pdf_page_count(pdf_path):
     try:
-        from AppKit import NSData, NSPDFImageRep
+        from pypdf import PdfReader
     except ImportError as exc:
-        raise ValueError("この環境ではPDF図面の読取機能を利用できません。") from exc
+        raise ValueError("PDF図面の読取ライブラリがインストールされていません。") from exc
 
-    data = NSData.dataWithContentsOfFile_(str(pdf_path))
-    if not data:
-        raise ValueError("PDFファイルを開けませんでした。")
-    representation = NSPDFImageRep.imageRepWithData_(data)
-    if not representation:
+    try:
+        reader = PdfReader(str(pdf_path))
+    except Exception as exc:
         raise ValueError("PDFファイルを解析できませんでした。")
-    return int(representation.pageCount())
+    return len(reader.pages)
 
 
 def _parse_page_map(page_map, page_count):
