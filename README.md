@@ -38,7 +38,9 @@ Render などの Python/Django 対応ホスティングで動かせます。
 
 - Build command: `./build.sh`
 - Start command: `gunicorn wallpaper_estimator.wsgi:application`
-- 必須環境変数: `SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
+- 必須環境変数: `SECRET_KEY`, `DEBUG=False`, `DATABASE_URL`
+- 管理ユーザー自動作成: `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, `DJANGO_SUPERUSER_PASSWORD`
+- 必要に応じて設定: `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
 - PostgreSQL を使う場合: `DATABASE_URL`
 
 Render の Blueprint を使う場合は `render.yaml` を読み込ませ、作成後に発行されたホスト名を `ALLOWED_HOSTS` と `CSRF_TRUSTED_ORIGINS` に設定します。
