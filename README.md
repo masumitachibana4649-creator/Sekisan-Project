@@ -48,7 +48,7 @@ AIはPDF図面から部屋名、周長、天井高、開口部面積、天井面
 Render などの Python/Django 対応ホスティングで動かせます。
 
 - Build command: `./build.sh`
-- Start command: `gunicorn wallpaper_estimator.wsgi:application`
+- Start command: `gunicorn wallpaper_estimator.wsgi:application --bind 0.0.0.0:$PORT`
 - 必須環境変数: `SECRET_KEY`, `DEBUG=False`, `DATABASE_URL`
 - 管理ユーザー自動作成: `DJANGO_SUPERUSER_USERNAME`, `DJANGO_SUPERUSER_EMAIL`, `DJANGO_SUPERUSER_PASSWORD`
 - 必要に応じて設定: `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`
