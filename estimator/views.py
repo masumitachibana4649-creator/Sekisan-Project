@@ -1,4 +1,5 @@
 import csv
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -7,6 +8,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import EstimateDefaultSettings, Project, Room
 from .pdf_analysis import analyze_wallpaper_pdf
+
+logger = logging.getLogger(__name__)
 
 
 def dashboard(request):
@@ -52,6 +55,12 @@ def project_create(request):
                 return redirect("project_detail", pk=project.pk)
             except ValueError as exc:
                 messages.warning(request, f"PDF自動読取はできませんでした。手入力の部屋情報で計算します。理由: {exc}")
+            except Exception:
+                logger.exception("Unexpected PDF analysis error for project %s", project.pk)
+                messages.warning(
+                    request,
+                    "PDF自動読取中に予期しないエラーが発生しました。手入力の部屋情報で計算します。",
+                )
 
         names = request.POST.getlist("room_name")
         perimeters = request.POST.getlist("perimeter_m")

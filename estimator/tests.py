@@ -2,6 +2,7 @@ from decimal import Decimal
 import json
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -158,5 +159,31 @@ class WallpaperEstimateTests(TestCase):
         extract_rooms.assert_called_once()
         self.assertEqual(result.rooms[0].name, "洋室")
         self.assertIn("壁紙量とロール本数はシステムの計算式で算出", result.memo)
+
+    def test_project_create_falls_back_when_pdf_analysis_has_unexpected_error(self):
+        with patch("estimator.views.analyze_wallpaper_pdf", side_effect=RuntimeError("boom")):
+            response = self.client.post(
+                reverse("project_create"),
+                {
+                    "name": "PDFエラー案件",
+                    "client_name": "橘工務店",
+                    "auto_read_pdf": "on",
+                    "drawing_pdf": SimpleUploadedFile("dummy.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
+                    "wallpaper_roll_width_m": "0.92",
+                    "wallpaper_roll_length_m": "50",
+                    "loss_rate_percent": "8",
+                    "unit_price_per_roll": "11800",
+                    "room_name": ["LDK"],
+                    "perimeter_m": ["18"],
+                    "height_m": ["2.4"],
+                    "opening_area_m2": ["4.2"],
+                    "ceiling_area_m2": ["20"],
+                    "note": [""],
+                },
+            )
+
+        project = Project.objects.get(name="PDFエラー案件")
+        self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
+        self.assertEqual(project.rooms.count(), 1)
 
 # Create your tests here.
