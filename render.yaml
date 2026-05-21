@@ -3,7 +3,7 @@ services:
     name: wallpaper-estimator
     runtime: python
     buildCommand: ./build.sh
-    startCommand: gunicorn wallpaper_estimator.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: gunicorn wallpaper_estimator.wsgi:application --bind 0.0.0.0:$PORT --timeout 180
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.9

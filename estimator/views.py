@@ -3,6 +3,7 @@ import logging
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
+from django.db import close_old_connections
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -47,7 +48,9 @@ def project_create(request):
 
         if auto_read_pdf and project.drawing_pdf:
             try:
+                close_old_connections()
                 analysis = analyze_wallpaper_pdf(project.drawing_pdf.path, _project_page_map(project))
+                close_old_connections()
                 _create_rooms_from_analysis(project, analysis.rooms)
                 project.memo = _join_memo(project.memo, analysis.memo)
                 project.save(update_fields=["memo"])
