@@ -131,7 +131,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(room.height_m, Decimal("2.40"))
         self.assertEqual(room.opening_area_m2, Decimal("3.25"))
         self.assertEqual(room.ceiling_area_m2, Decimal("22.64"))
-        self.assertIn("AI信頼度 0.82", room.note)
+        self.assertIn("根拠: 2F平面図", room.note)
+        self.assertIn("AI信頼度: 0.82", room.note)
         self.assertEqual(result["warnings"], ["開口部は一部推定"])
 
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):

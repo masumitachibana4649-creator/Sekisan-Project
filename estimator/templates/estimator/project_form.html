@@ -2,7 +2,7 @@
 {% block title %}新規積算 | 壁紙積算システム{% endblock %}
 
 {% block content %}
-<form class="estimate-form" method="post" enctype="multipart/form-data">
+<form class="estimate-form" method="post" enctype="multipart/form-data" data-estimate-form>
   {% csrf_token %}
   <section class="form-band">
     <div class="section-heading">
@@ -61,6 +61,14 @@
     </div>
   </section>
 </form>
+
+<div class="loading-overlay" data-loading-overlay role="status" aria-live="polite" aria-hidden="true">
+  <div class="loading-dialog">
+    <div class="loading-spinner" aria-hidden="true"></div>
+    <strong>計算中です</strong>
+    <p>PDF図面を読み取り、部屋情報と積算結果を作成しています。</p>
+  </div>
+</div>
 
 <template id="room-row-template">
   {% include "estimator/room_row.html" with name="" perimeter="" height="2.4" opening="0" ceiling="0" note="" %}

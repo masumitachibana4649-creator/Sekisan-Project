@@ -354,14 +354,21 @@ textarea { resize: vertical; }
 }
 
 .room-head,
-.room-line,
-.result-head,
-.result-row {
+.room-line {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr 0.8fr 0.9fr 0.8fr 1fr;
   gap: 10px;
   min-width: 820px;
   align-items: center;
+}
+
+.result-head,
+.result-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.1fr) minmax(82px, 0.7fr) minmax(82px, 0.7fr) minmax(98px, 0.8fr) minmax(64px, 0.5fr) minmax(320px, 2.6fr);
+  gap: 10px;
+  min-width: 1060px;
+  align-items: start;
 }
 
 .room-head,
@@ -405,6 +412,11 @@ textarea { resize: vertical; }
 .result-row span,
 .result-row strong {
   overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.result-row span:last-child {
+  line-height: 1.55;
 }
 
 .memo-box {
@@ -448,6 +460,57 @@ textarea { resize: vertical; }
   padding: 12px 14px;
   background: #edf4f0;
   border: 1px solid #cddfd5;
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 32, 28, 0.36);
+  backdrop-filter: blur(4px);
+}
+
+.loading-overlay.is-visible {
+  display: grid;
+}
+
+.loading-dialog {
+  width: min(360px, 100%);
+  padding: 28px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.loading-dialog strong {
+  display: block;
+  margin-top: 16px;
+  font-size: 20px;
+}
+
+.loading-dialog p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.loading-spinner {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  border: 7px solid #dbe2dd;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 860px) {

@@ -159,6 +159,7 @@ def _analysis_prompt(parsed_pages):
 - 天井面積 ceiling_area_m2
 
 ルール:
+- 回答内の文章は、warnings と evidence を含めて必ず日本語で書いてください。
 - 単位はすべてメートルまたは平方メートルに変換してください。
 - mm表記はmに換算してください。
 - C.H、CH、天井高が読める場合は height_m に反映してください。
@@ -234,8 +235,8 @@ def _parse_ai_analysis_response(response_text):
         evidence = str(room.get("evidence") or "").strip()
         note_parts = []
         if evidence:
-            note_parts.append(evidence)
-        note_parts.append(f"AI信頼度 {confidence}")
+            note_parts.append(f"根拠: {evidence}")
+        note_parts.append(f"AI信頼度: {confidence}")
         rooms.append(
             AnalyzedRoom(
                 name=name,
@@ -243,7 +244,7 @@ def _parse_ai_analysis_response(response_text):
                 height_m=_decimal_from_ai(room.get("height_m"), "0"),
                 opening_area_m2=_decimal_from_ai(room.get("opening_area_m2"), "0"),
                 ceiling_area_m2=_decimal_from_ai(room.get("ceiling_area_m2"), "0"),
-                note=" / ".join(note_parts)[:160],
+                note=" / ".join(note_parts),
             )
         )
 
