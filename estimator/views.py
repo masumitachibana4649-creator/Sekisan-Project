@@ -1,10 +1,11 @@
 import csv
 import logging
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.db import close_old_connections
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import EstimateDefaultSettings, Project, Room
@@ -118,6 +119,22 @@ def project_detail(request, pk):
     project = get_object_or_404(Project.objects.prefetch_related("rooms"), pk=pk)
     rooms = project.rooms.all()
     return render(request, "estimator/project_detail.html", {"project": project, "rooms": rooms})
+
+
+def project_pdf(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    if not project.drawing_pdf:
+        raise Http404("PDFが登録されていません。")
+
+    try:
+        pdf_file = project.drawing_pdf.open("rb")
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        raise Http404("PDFファイルが見つかりません。") from exc
+
+    filename = Path(project.drawing_pdf.name).name
+    response = FileResponse(pdf_file, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
 
 
 def project_csv(request, pk):

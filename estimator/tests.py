@@ -55,6 +55,22 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.rooms.count(), 1)
         self.assertEqual(project.total_rolls, 2)
 
+    def test_project_pdf_view_serves_uploaded_pdf(self):
+        project = Project.objects.create(
+            name="PDF表示テスト",
+            drawing_pdf=SimpleUploadedFile(
+                "drawing.pdf",
+                b"%PDF-1.4\n% test pdf\n",
+                content_type="application/pdf",
+            ),
+        )
+
+        response = self.client.get(reverse("project_pdf", args=[project.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("inline", response["Content-Disposition"])
+
     def test_sample_pdf_analysis_rooms_match_expected_totals(self):
         project = Project.objects.create(
             name="PDF解析テスト",
@@ -160,6 +176,39 @@ class WallpaperEstimateTests(TestCase):
         extract_rooms.assert_called_once()
         self.assertEqual(result.rooms[0].name, "洋室")
         self.assertIn("壁紙量とロール本数はシステムの計算式で算出", result.memo)
+
+    def test_analyze_wallpaper_pdf_rejects_obviously_incomplete_room_extraction(self):
+        extracted_rooms = _parse_ai_analysis_response(json.dumps({
+            "rooms": [
+                {
+                    "name": "1階 洋室",
+                    "perimeter_m": 12,
+                    "height_m": 2.4,
+                    "opening_area_m2": 0,
+                    "ceiling_area_m2": 10.5,
+                    "confidence": 0.9,
+                    "evidence": "1F平面図",
+                },
+                {
+                    "name": "2階 LDK",
+                    "perimeter_m": 20,
+                    "height_m": 2.4,
+                    "opening_area_m2": 0,
+                    "ceiling_area_m2": 27.37,
+                    "confidence": 0.9,
+                    "evidence": "2F平面図",
+                },
+            ],
+            "warnings": [],
+        }))
+        plan_text = "洋室 洋室 洋室 収納 収納 収納 収納 廊下 玄関 トイレ LDK 廊下 洗面所 トイレ 収納 浴室 バルコニー"
+
+        with patch("estimator.pdf_analysis._pdf_page_count", return_value=10), patch(
+            "estimator.pdf_analysis._extract_rooms_with_ai",
+            return_value=extracted_rooms,
+        ), patch("estimator.pdf_analysis._plan_page_text", return_value=plan_text):
+            with self.assertRaisesMessage(ValueError, "部屋抽出数が不足"):
+                analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
 
     def test_project_create_falls_back_when_pdf_analysis_has_unexpected_error(self):
         with patch("estimator.views.analyze_wallpaper_pdf", side_effect=RuntimeError("boom")):

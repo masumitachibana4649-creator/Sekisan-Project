@@ -25,7 +25,7 @@
   <div class="section-heading">
     <h2>部屋別明細</h2>
     {% if project.drawing_pdf %}
-      <a href="{{ project.drawing_pdf.url }}">PDFを開く</a>
+      <a href="{% url 'project_pdf' project.pk %}" target="_blank" rel="noopener">PDFを開く</a>
     {% endif %}
   </div>
   {% if project.memo %}

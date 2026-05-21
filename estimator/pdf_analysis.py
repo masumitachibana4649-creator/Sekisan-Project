@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 import json
 import os
+import re
 
 try:
     from django.conf import settings
@@ -36,6 +37,18 @@ PAGE_LABELS = {
     "page_section": "断面図",
 }
 
+PLAN_PAGE_KEYS = ("page_1f_plan", "page_2f_plan", "page_3f_plan")
+NON_WALLPAPER_ROOM_LABELS = ("浴室", "バルコニー")
+ROOM_LABEL_PATTERNS = {
+    "洋室": ("洋室",),
+    "収納": ("収納",),
+    "廊下": ("廊下",),
+    "玄関": ("玄関",),
+    "トイレ": ("トイレ",),
+    "LDK": ("LDK", "ＬＤＫ"),
+    "洗面所": ("洗面所",),
+}
+
 
 def analyze_wallpaper_pdf(pdf_path, page_map=None):
     page_count = _pdf_page_count(pdf_path)
@@ -48,10 +61,12 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
     if not rooms:
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
+    validation_warnings = _validate_room_extraction(pdf_path, parsed_pages, rooms)
+
     page_summary = "、".join(
         f"{PAGE_LABELS[key]}={value}P" for key, value in parsed_pages.items() if value is not None
     )
-    warnings = " ".join(ai_result["warnings"])
+    warnings = " ".join(ai_result["warnings"] + validation_warnings)
     warning_text = f" 注意: {warnings}" if warnings else ""
     return PdfAnalysisResult(
         rooms=rooms,
@@ -165,6 +180,9 @@ def _analysis_prompt(parsed_pages):
 - C.H、CH、天井高が読める場合は height_m に反映してください。
 - 天井高が部屋ごとに読めない場合は、図面内の標準天井高を使ってください。
 - 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
+- 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
+- 同じ室名が複数ある場合は統合せず、位置や階で区別してください。例: 洋室が3つ見える場合は3行、収納が複数見える場合は「収納 一式」または個別行として漏れなく含めてください。
+- 廊下、階段、玄関、トイレ、洗面所、収納、物入もクロス施工対象として含めてください。
 - 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
 - 開口部寸法が読み取れない場合は opening_area_m2 を 0 にし、warnings に理由を入れてください。
 - 不確かな値は evidence に根拠と推定理由を書き、confidence を下げてください。
@@ -250,6 +268,86 @@ def _parse_ai_analysis_response(response_text):
 
     warnings = [str(warning).strip() for warning in payload.get("warnings", []) if str(warning).strip()]
     return {"rooms": rooms, "warnings": warnings}
+
+
+def _validate_room_extraction(pdf_path, parsed_pages, rooms):
+    plan_text = _plan_page_text(pdf_path, parsed_pages)
+    if not plan_text:
+        return []
+
+    expected_counts = _expected_room_counts(plan_text)
+    if not expected_counts:
+        return []
+
+    actual_room_text = " ".join(room.name for room in rooms)
+    actual_counts = {
+        label: _actual_room_count(actual_room_text, aliases, expected_counts[label])
+        for label, aliases in ROOM_LABEL_PATTERNS.items()
+        if label in expected_counts
+    }
+    missing = {
+        label: count - actual_counts.get(label, 0)
+        for label, count in expected_counts.items()
+        if count > actual_counts.get(label, 0)
+    }
+    if not missing:
+        return []
+
+    expected_total = sum(expected_counts.values())
+    actual_total = len(rooms)
+    missing_total = sum(missing.values())
+    missing_summary = "、".join(f"{label}{count}件" for label, count in missing.items())
+    if expected_total >= 5 and (actual_total < (expected_total * Decimal("0.60")) or missing_total >= 3):
+        raise ValueError(
+            "PDF AI読取の部屋抽出数が不足している可能性があります。"
+            f"平面図上の室名候補は約{expected_total}件、抽出結果は{actual_total}件です。"
+            f"未抽出候補: {missing_summary}。"
+        )
+
+    return [f"平面図上の室名候補に対し、未抽出の可能性があります: {missing_summary}。"]
+
+
+def _plan_page_text(pdf_path, parsed_pages):
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(pdf_path))
+        texts = []
+        for key in PLAN_PAGE_KEYS:
+            page_number = parsed_pages.get(key)
+            if not page_number:
+                continue
+            texts.append(reader.pages[page_number - 1].extract_text() or "")
+        return "\n".join(texts)
+    except Exception:
+        return ""
+
+
+def _expected_room_counts(plan_text):
+    text = _normalize_text(plan_text)
+    counts = {}
+    for label, aliases in ROOM_LABEL_PATTERNS.items():
+        count = sum(_count_label_occurrences(text, alias) for alias in {_normalize_text(alias) for alias in aliases})
+        if count:
+            counts[label] = count
+    for excluded in NON_WALLPAPER_ROOM_LABELS:
+        counts.pop(excluded, None)
+    return counts
+
+
+def _actual_room_count(room_text, aliases, expected_count):
+    text = _normalize_text(room_text)
+    if "一式" in str(room_text) and any(alias in text for alias in {_normalize_text(alias) for alias in aliases}):
+        return expected_count
+    return sum(1 for alias in {_normalize_text(alias) for alias in aliases} for match in re.finditer(re.escape(alias), text))
+
+
+def _count_label_occurrences(text, label):
+    return len(re.findall(re.escape(_normalize_text(label)), text))
+
+
+def _normalize_text(value):
+    return str(value).replace("ＬＤＫ", "LDK").upper()
 
 
 def _decimal_from_ai(value, default):
