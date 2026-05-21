@@ -1,5 +1,12 @@
 from dataclasses import dataclass
 from decimal import Decimal
+import json
+import os
+
+try:
+    from django.conf import settings
+except ImportError:  # pragma: no cover - allows isolated script usage.
+    settings = None
 
 
 @dataclass(frozen=True)
@@ -36,24 +43,22 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
     if not parsed_pages.get("page_1f_plan") and not parsed_pages.get("page_2f_plan") and not parsed_pages.get("page_3f_plan"):
         raise ValueError("平面図のページが指定されていません。")
 
-    rooms = _sample_plan_rooms(parsed_pages)
+    ai_result = _extract_rooms_with_ai(pdf_path, parsed_pages)
+    rooms = ai_result["rooms"]
     if not rooms:
-        raise ValueError("指定されたページから計算対象の部屋を作成できませんでした。")
+        raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
     page_summary = "、".join(
         f"{PAGE_LABELS[key]}={value}P" for key, value in parsed_pages.items() if value is not None
     )
-    missing_summary = "、".join(
-        PAGE_LABELS[key] for key, value in parsed_pages.items() if value is None
-    )
-    missing_text = f" 存在しない指定: {missing_summary}。" if missing_summary else ""
-    section_text = "断面図のC.H 2400を採用。" if parsed_pages.get("page_section") else "断面図なしのためC.H 2400を仮採用。"
+    warnings = " ".join(ai_result["warnings"])
+    warning_text = f" 注意: {warnings}" if warnings else ""
     return PdfAnalysisResult(
         rooms=rooms,
         memo=(
-            f"PDF自動読取: {page_summary}。{missing_text}"
-            f"{section_text}浴室はクロス対象外。"
-            "窓・ドアの開口寸法は明記がないため控除なし。"
+            f"PDF AI読取: {page_summary}。"
+            "部屋名・周長・天井高・開口部面積・天井面積をAIで抽出し、"
+            f"壁紙量とロール本数はシステムの計算式で算出。{warning_text}"
         ),
     )
 
@@ -86,6 +91,179 @@ def _parse_page_map(page_map, page_count):
             raise ValueError(f"{PAGE_LABELS[key]}のページ番号 {page_number} はPDFのページ範囲外です。")
         parsed[key] = page_number
     return parsed
+
+
+def _extract_rooms_with_ai(pdf_path, parsed_pages):
+    api_key = _setting("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY が設定されていないためPDF AI読取を実行できません。")
+
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise ValueError("openai パッケージがインストールされていません。") from exc
+
+    model = _setting("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
+    client = OpenAI(api_key=api_key)
+    uploaded_file = None
+    try:
+        with open(pdf_path, "rb") as pdf_file:
+            uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
+
+        response = client.responses.create(
+            model=model,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_file", "file_id": uploaded_file.id},
+                        {"type": "input_text", "text": _analysis_prompt(parsed_pages)},
+                    ],
+                }
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "wallpaper_pdf_analysis",
+                    "strict": True,
+                    "schema": _analysis_schema(),
+                }
+            },
+        )
+    except Exception as exc:
+        raise ValueError(f"PDF AI読取に失敗しました: {exc}") from exc
+    finally:
+        if uploaded_file is not None:
+            try:
+                client.files.delete(uploaded_file.id)
+            except Exception:
+                pass
+
+    return _parse_ai_analysis_response(_response_text(response))
+
+
+def _analysis_prompt(parsed_pages):
+    page_lines = "\n".join(
+        f"- {PAGE_LABELS[key]}: {value}ページ" for key, value in parsed_pages.items() if value is not None
+    )
+    return f"""
+添付PDFは壁紙積算用の建築図面です。以下の指定ページだけを主な根拠にして、クロス施工対象の部屋を抽出してください。
+
+{page_lines}
+
+抽出対象:
+- 部屋名
+- 部屋の周長 perimeter_m
+- 天井高 height_m
+- 窓・ドアなどの開口部面積 opening_area_m2
+- 天井面積 ceiling_area_m2
+
+ルール:
+- 単位はすべてメートルまたは平方メートルに変換してください。
+- mm表記はmに換算してください。
+- C.H、CH、天井高が読める場合は height_m に反映してください。
+- 天井高が部屋ごとに読めない場合は、図面内の標準天井高を使ってください。
+- 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
+- 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
+- 開口部寸法が読み取れない場合は opening_area_m2 を 0 にし、warnings に理由を入れてください。
+- 不確かな値は evidence に根拠と推定理由を書き、confidence を下げてください。
+- ロール本数、ロス率込み面積、金額は計算しないでください。アプリ側で計算します。
+""".strip()
+
+
+def _analysis_schema():
+    room_schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "perimeter_m": {"type": "number", "minimum": 0},
+            "height_m": {"type": "number", "minimum": 0},
+            "opening_area_m2": {"type": "number", "minimum": 0},
+            "ceiling_area_m2": {"type": "number", "minimum": 0},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "evidence": {"type": "string"},
+        },
+        "required": [
+            "name",
+            "perimeter_m",
+            "height_m",
+            "opening_area_m2",
+            "ceiling_area_m2",
+            "confidence",
+            "evidence",
+        ],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "rooms": {"type": "array", "items": room_schema},
+            "warnings": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["rooms", "warnings"],
+        "additionalProperties": False,
+    }
+
+
+def _response_text(response):
+    output_text = getattr(response, "output_text", None)
+    if output_text:
+        return output_text
+
+    texts = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            text = getattr(content, "text", None)
+            if text:
+                texts.append(text)
+    if texts:
+        return "\n".join(texts)
+    raise ValueError("AI応答からJSON本文を取得できませんでした。")
+
+
+def _parse_ai_analysis_response(response_text):
+    try:
+        payload = json.loads(response_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("AI応答がJSONとして解析できませんでした。") from exc
+
+    rooms = []
+    for index, room in enumerate(payload.get("rooms", []), start=1):
+        name = str(room.get("name") or f"部屋{index}").strip()
+        confidence = _decimal_from_ai(room.get("confidence"), "0")
+        evidence = str(room.get("evidence") or "").strip()
+        note_parts = []
+        if evidence:
+            note_parts.append(evidence)
+        note_parts.append(f"AI信頼度 {confidence}")
+        rooms.append(
+            AnalyzedRoom(
+                name=name,
+                perimeter_m=_decimal_from_ai(room.get("perimeter_m"), "0"),
+                height_m=_decimal_from_ai(room.get("height_m"), "0"),
+                opening_area_m2=_decimal_from_ai(room.get("opening_area_m2"), "0"),
+                ceiling_area_m2=_decimal_from_ai(room.get("ceiling_area_m2"), "0"),
+                note=" / ".join(note_parts)[:160],
+            )
+        )
+
+    warnings = [str(warning).strip() for warning in payload.get("warnings", []) if str(warning).strip()]
+    return {"rooms": rooms, "warnings": warnings}
+
+
+def _decimal_from_ai(value, default):
+    try:
+        return Decimal(str(value if value is not None else default)).quantize(Decimal("0.01"))
+    except Exception:
+        return Decimal(default)
+
+
+def _setting(name, default=None):
+    if settings is not None and getattr(settings, "configured", False):
+        value = getattr(settings, name, None)
+        if value is not None:
+            return value
+    return os.environ.get(name, default)
 
 
 def _sample_plan_rooms(parsed_pages=None):

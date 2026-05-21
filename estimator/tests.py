@@ -1,10 +1,12 @@
 from decimal import Decimal
+import json
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
 
 from .models import Project, Room
-from .pdf_analysis import _sample_plan_rooms
+from .pdf_analysis import analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
 
 
 class WallpaperEstimateTests(TestCase):
@@ -102,5 +104,59 @@ class WallpaperEstimateTests(TestCase):
 
         self.assertEqual(project.rooms.count(), 8)
         self.assertEqual(project.total_area.quantize(Decimal("0.01")), Decimal("284.80"))
+
+    def test_ai_analysis_response_is_converted_to_analyzed_rooms(self):
+        payload = {
+            "rooms": [
+                {
+                    "name": "2F LDK",
+                    "perimeter_m": 19.1,
+                    "height_m": 2.4,
+                    "opening_area_m2": 3.25,
+                    "ceiling_area_m2": 22.64,
+                    "confidence": 0.82,
+                    "evidence": "2F平面図: LDK 13.68帖、C.H 2400",
+                }
+            ],
+            "warnings": ["開口部は一部推定"],
+        }
+
+        result = _parse_ai_analysis_response(json.dumps(payload))
+
+        self.assertEqual(len(result["rooms"]), 1)
+        room = result["rooms"][0]
+        self.assertEqual(room.name, "2F LDK")
+        self.assertEqual(room.perimeter_m, Decimal("19.10"))
+        self.assertEqual(room.height_m, Decimal("2.40"))
+        self.assertEqual(room.opening_area_m2, Decimal("3.25"))
+        self.assertEqual(room.ceiling_area_m2, Decimal("22.64"))
+        self.assertIn("AI信頼度 0.82", room.note)
+        self.assertEqual(result["warnings"], ["開口部は一部推定"])
+
+    def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
+        extracted_room = _parse_ai_analysis_response(json.dumps({
+            "rooms": [
+                {
+                    "name": "洋室",
+                    "perimeter_m": 12,
+                    "height_m": 2.4,
+                    "opening_area_m2": 1.2,
+                    "ceiling_area_m2": 9,
+                    "confidence": 0.9,
+                    "evidence": "1F平面図: 洋室 3.0x3.0m",
+                }
+            ],
+            "warnings": [],
+        }))
+
+        with patch("estimator.pdf_analysis._pdf_page_count", return_value=10), patch(
+            "estimator.pdf_analysis._extract_rooms_with_ai",
+            return_value=extracted_room,
+        ) as extract_rooms:
+            result = analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5"})
+
+        extract_rooms.assert_called_once()
+        self.assertEqual(result.rooms[0].name, "洋室")
+        self.assertIn("壁紙量とロール本数はシステムの計算式で算出", result.memo)
 
 # Create your tests here.

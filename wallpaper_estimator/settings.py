@@ -157,6 +157,8 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_PDF_ANALYSIS_MODEL = os.environ.get("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 if RENDER_EXTERNAL_HOSTNAME:
