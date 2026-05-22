@@ -53,13 +53,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: var(--green);
-  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  display: block;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 main {

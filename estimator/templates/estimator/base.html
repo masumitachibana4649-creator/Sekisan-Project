@@ -5,12 +5,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}壁紙積算システム{% endblock %}</title>
+  <link rel="icon" href="{% static 'estimator/favicon.ico' %}" sizes="any">
+  <link rel="icon" type="image/png" href="{% static 'estimator/favicon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'estimator/apple-touch-icon.png' %}">
   <link rel="stylesheet" href="{% static 'estimator/styles.css' %}">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="{% url 'dashboard' %}">
-      <span class="brand-mark">W</span>
+      <img class="brand-mark" src="{% static 'estimator/brand-icon.png' %}" alt="" width="42" height="42">
       <span>壁紙積算システム</span>
     </a>
     <nav class="top-actions">
