@@ -27,9 +27,17 @@ class RoomInline(admin.TabularInline):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("name", "client_name", "total_rolls", "total_cost", "updated_at")
+    list_display = ("name", "client_name", "total_rolls_display", "total_cost_display", "updated_at")
     search_fields = ("name", "client_name")
     inlines = [RoomInline]
+
+    @admin.display(description="ロール本数")
+    def total_rolls_display(self, obj):
+        return obj.total_rolls
+
+    @admin.display(description="概算金額")
+    def total_cost_display(self, obj):
+        return obj.total_cost
 
 
 @admin.register(EstimateDefaultSettings)

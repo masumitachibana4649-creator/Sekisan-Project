@@ -383,8 +383,12 @@ textarea { resize: vertical; }
 
 .room-line,
 .result-row {
-  padding: 10px 0;
+  padding: 10px 12px;
   border-top: 1px solid var(--line);
+}
+
+.result-table .result-row:nth-child(odd) {
+  background: #eef8fb;
 }
 
 .result-hero {

@@ -2,13 +2,16 @@ from decimal import Decimal
 import json
 from unittest.mock import patch
 
+from django.contrib.admin.sites import AdminSite
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
+from .admin import ProjectAdmin
 from .models import Project, Room
 from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
+from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
 class WallpaperEstimateTests(TestCase):
@@ -73,6 +76,16 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertIn("inline", response["Content-Disposition"])
+
+    def test_result_text_filters_insert_sentence_breaks_and_format_confidence(self):
+        self.assertEqual(str(sentence_breaks("一文目です。二文目です。")), "一文目です。<br>二文目です。<br>")
+        self.assertEqual(str(room_note("根拠: 図面。AI信頼度: 0.82")), "根拠: 図面。<br>AI信頼度: 82%")
+
+    def test_project_admin_total_columns_have_japanese_labels(self):
+        project_admin = ProjectAdmin(Project, AdminSite())
+
+        self.assertEqual(project_admin.total_rolls_display.short_description, "ロール本数")
+        self.assertEqual(project_admin.total_cost_display.short_description, "概算金額")
 
     def test_sample_pdf_analysis_rooms_match_expected_totals(self):
         project = Project.objects.create(

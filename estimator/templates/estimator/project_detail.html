@@ -1,4 +1,5 @@
 {% extends "estimator/base.html" %}
+{% load estimate_extras %}
 {% block title %}{{ project.name }} | 壁紙積算システム{% endblock %}
 
 {% block content %}
@@ -37,7 +38,7 @@
     {% endif %}
   </div>
   {% if project.memo %}
-    <p class="memo-box">{{ project.memo|linebreaksbr }}</p>
+    <p class="memo-box">{{ project.memo|sentence_breaks }}</p>
   {% endif %}
   {% if has_estimated_openings %}
     <p class="estimate-note">青文字は立面図・平面図の縮尺と既知寸法からの推定値なので注意</p>
@@ -66,7 +67,7 @@
         <span>{{ room.ceiling_area_m2 }} m2</span>
         <span>{{ room.total_area|floatformat:2 }} m2</span>
         <span>{{ room.rolls_required }} 本</span>
-        <span>{{ room.note|default:"-" }}</span>
+        <span>{{ room.note|room_note }}</span>
       </div>
     {% empty %}
       <div class="empty-result">
