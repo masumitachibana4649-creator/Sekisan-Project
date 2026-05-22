@@ -16,15 +16,11 @@
     <div class="form-grid">
       <label>案件名<input name="name" required placeholder="例: 橘邸 改装工事"></label>
       <label>顧客名<input name="client_name" placeholder="例: 橘工務店"></label>
-      <label>図面PDF<input name="drawing_pdf" type="file" accept="application/pdf"></label>
-      <label>1ロール単価<input name="unit_price_per_roll" type="number" min="0" value="{{ defaults.unit_price_per_roll }}"></label>
+      <label class="wide">図面PDF<input name="drawing_pdf" type="file" accept="application/pdf" required></label>
       <label>ロール幅(m)<input name="wallpaper_roll_width_m" type="number" step="0.01" min="0" value="{{ defaults.wallpaper_roll_width_m }}"></label>
       <label>ロール長さ(m)<input name="wallpaper_roll_length_m" type="number" step="0.1" min="0" value="{{ defaults.wallpaper_roll_length_m }}"></label>
       <label>ロス率(%)<input name="loss_rate_percent" type="number" step="0.1" min="0" value="{{ defaults.loss_rate_percent }}"></label>
-      <label class="check-field">
-        <input name="auto_read_pdf" type="checkbox" checked>
-        <span>PDFから部屋情報を読み取る</span>
-      </label>
+      <label>1ロール単価<input name="unit_price_per_roll" type="number" min="0" value="{{ defaults.unit_price_per_roll }}"></label>
       <label class="wide">メモ<textarea name="memo" rows="2" placeholder="品番、施工条件、注意事項"></textarea></label>
     </div>
   </section>
@@ -45,21 +41,6 @@
       <label>断面図{% include "estimator/page_select.html" with name="page_section" selected=default_page %}</label>
     </div>
   </section>
-
-  <section class="form-band">
-    <div class="section-heading">
-      <h2>部屋別入力</h2>
-      <button class="secondary-action" type="button" data-add-room>＋ 行追加</button>
-    </div>
-    <div class="room-table" data-room-table>
-      <div class="room-head">
-        <span>部屋名</span><span>周長(m)</span><span>天井高(m)</span><span>開口部(m2)</span><span>天井(m2)</span><span>備考</span>
-      </div>
-      {% include "estimator/room_row.html" with name="LDK" perimeter="18.0" height="2.4" opening="4.2" ceiling="20.0" note="" %}
-      {% include "estimator/room_row.html" with name="洋室" perimeter="14.4" height="2.4" opening="3.0" ceiling="12.0" note="" %}
-      {% include "estimator/room_row.html" with name="廊下" perimeter="10.2" height="2.4" opening="1.5" ceiling="6.0" note="" %}
-    </div>
-  </section>
 </form>
 
 <div class="loading-overlay" data-loading-overlay role="status" aria-live="polite" aria-hidden="true">
@@ -70,7 +51,4 @@
   </div>
 </div>
 
-<template id="room-row-template">
-  {% include "estimator/room_row.html" with name="" perimeter="" height="2.4" opening="0" ceiling="0" note="" %}
-</template>
 {% endblock %}

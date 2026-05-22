@@ -27,7 +27,10 @@ def dashboard(request):
 def project_create(request):
     defaults = EstimateDefaultSettings.load()
     if request.method == "POST":
-        auto_read_pdf = request.POST.get("auto_read_pdf") == "on"
+        if not request.FILES.get("drawing_pdf"):
+            messages.error(request, "図面PDFを選択してください。")
+            return redirect("project_create")
+
         project = Project.objects.create(
             name=request.POST.get("name") or "無題の積算",
             client_name=request.POST.get("client_name", ""),
@@ -47,61 +50,10 @@ def project_create(request):
             memo=request.POST.get("memo", ""),
         )
 
-        if auto_read_pdf and project.drawing_pdf:
-            try:
-                close_old_connections()
-                analysis = analyze_wallpaper_pdf(project.drawing_pdf.path, _project_page_map(project))
-                close_old_connections()
-                _create_rooms_from_analysis(project, analysis.rooms)
-                project.memo = _join_memo(project.memo, analysis.memo)
-                project.save(update_fields=["memo"])
-                messages.success(request, "PDF図面から部屋情報を読み取り、積算を作成しました。")
-                return redirect("project_detail", pk=project.pk)
-            except ValueError as exc:
-                messages.warning(request, f"PDF自動読取はできませんでした。手入力の部屋情報で計算します。理由: {exc}")
-            except Exception:
-                logger.exception("Unexpected PDF analysis error for project %s", project.pk)
-                messages.warning(
-                    request,
-                    "PDF自動読取中に予期しないエラーが発生しました。手入力の部屋情報で計算します。",
-                )
-
-        names = request.POST.getlist("room_name")
-        perimeters = request.POST.getlist("perimeter_m")
-        heights = request.POST.getlist("height_m")
-        openings = request.POST.getlist("opening_area_m2")
-        ceilings = request.POST.getlist("ceiling_area_m2")
-        notes = request.POST.getlist("note")
-
-        created_rooms = 0
-        for index, room_name in enumerate(names):
-            perimeter = _decimal(_at(perimeters, index), "0")
-            if not room_name and perimeter == 0:
-                continue
-            Room.objects.create(
-                project=project,
-                name=room_name or f"部屋{index + 1}",
-                perimeter_m=perimeter,
-                height_m=_decimal(_at(heights, index), "2.4"),
-                opening_area_m2=_decimal(_at(openings, index), "0"),
-                ceiling_area_m2=_decimal(_at(ceilings, index), "0"),
-                note=_at(notes, index),
-            )
-            created_rooms += 1
-
-        if created_rooms == 0:
-            Room.objects.create(
-                project=project,
-                name="LDK",
-                perimeter_m=Decimal("18.00"),
-                height_m=Decimal("2.40"),
-                opening_area_m2=Decimal("4.20"),
-                ceiling_area_m2=Decimal("20.00"),
-                note="サンプル値",
-            )
-            messages.info(request, "部屋入力が空だったため、サンプル行で積算しました。")
+        if _read_pdf_into_project(request, project):
+            messages.success(request, "PDF図面から部屋情報を読み取り、積算を作成しました。")
         else:
-            messages.success(request, "積算を作成しました。")
+            messages.error(request, "積算が作成できませんでした。")
         return redirect("project_detail", pk=project.pk)
 
     return render(
@@ -118,7 +70,28 @@ def project_create(request):
 def project_detail(request, pk):
     project = get_object_or_404(Project.objects.prefetch_related("rooms"), pk=pk)
     rooms = project.rooms.all()
-    return render(request, "estimator/project_detail.html", {"project": project, "rooms": rooms})
+    has_estimated_openings = any(_is_estimated_opening(room) for room in rooms)
+    return render(
+        request,
+        "estimator/project_detail.html",
+        {
+            "project": project,
+            "rooms": rooms,
+            "has_estimated_openings": has_estimated_openings,
+        },
+    )
+
+
+def project_recalculate(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    if request.method != "POST":
+        return redirect("project_detail", pk=project.pk)
+
+    if _read_pdf_into_project(request, project, replace_rooms=True):
+        messages.success(request, "PDF図面から部屋情報を読み取り、積算を作成しました。")
+    else:
+        messages.error(request, "積算が作成できませんでした。")
+    return redirect("project_detail", pk=project.pk)
 
 
 def project_pdf(request, pk):
@@ -181,6 +154,36 @@ def _create_rooms_from_analysis(project, analyzed_rooms):
             ceiling_area_m2=room.ceiling_area_m2,
             note=room.note,
         )
+
+
+def _read_pdf_into_project(request, project, replace_rooms=False):
+    if not project.drawing_pdf:
+        messages.error(request, "PDF自動読取はできませんでした。理由: 図面PDFが登録されていません。")
+        return False
+
+    try:
+        close_old_connections()
+        analysis = analyze_wallpaper_pdf(project.drawing_pdf.path, _project_page_map(project))
+        if replace_rooms:
+            project.rooms.all().delete()
+        _create_rooms_from_analysis(project, analysis.rooms)
+        project.memo = _join_memo(project.memo, analysis.memo)
+        project.save(update_fields=["memo"])
+        return True
+    except ValueError as exc:
+        messages.error(request, f"PDF自動読取はできませんでした。理由: {exc}")
+    except Exception:
+        logger.exception("Unexpected PDF analysis error for project %s", project.pk)
+        messages.error(request, "PDF自動読取中に予期しないエラーが発生しました。")
+    finally:
+        close_old_connections()
+    return False
+
+
+def _is_estimated_opening(room):
+    return room.opening_area_m2 > 0 and any(
+        marker in room.note for marker in ("推定", "立面図", "平面図", "スケール")
+    )
 
 
 def _join_memo(existing, added):

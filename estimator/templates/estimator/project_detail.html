@@ -10,7 +10,15 @@
   </div>
   <div class="result-actions">
     <a class="secondary-action" href="{% url 'project_create' %}">新規積算</a>
-    <a class="primary-action" href="{% url 'project_csv' project.pk %}">CSV出力</a>
+    {% if project.drawing_pdf %}
+      <form method="post" action="{% url 'project_recalculate' project.pk %}" data-estimate-form>
+        {% csrf_token %}
+        <button class="secondary-action" type="submit">再計算</button>
+      </form>
+    {% endif %}
+    {% if rooms %}
+      <a class="primary-action" href="{% url 'project_csv' project.pk %}">CSV出力</a>
+    {% endif %}
   </div>
 </section>
 
@@ -31,6 +39,9 @@
   {% if project.memo %}
     <p class="memo-box">{{ project.memo|linebreaksbr }}</p>
   {% endif %}
+  {% if has_estimated_openings %}
+    <p class="estimate-note">青文字は立面図・平面図の縮尺と既知寸法からの推定値なので注意</p>
+  {% endif %}
   {% if project.drawing_pdf %}
     <div class="page-map-summary">
       <span>1F平面図: {{ project.page_1f_plan }}</span>
@@ -45,16 +56,24 @@
   {% endif %}
   <div class="result-table">
     <div class="result-head">
-      <span>部屋名</span><span>壁面</span><span>天井</span><span>必要面積</span><span>本数</span><span>備考</span>
+      <span>部屋名</span><span>壁面</span><span>開口</span><span>天井</span><span>必要面積</span><span>本数</span><span>備考</span>
     </div>
     {% for room in rooms %}
       <div class="result-row">
         <strong>{{ room.name }}</strong>
         <span>{{ room.wall_area|floatformat:2 }} m2</span>
+        <span {% if room.opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %}>{{ room.opening_area_m2 }} m2</span>
         <span>{{ room.ceiling_area_m2 }} m2</span>
         <span>{{ room.total_area|floatformat:2 }} m2</span>
         <span>{{ room.rolls_required }} 本</span>
-        <span>{{ room.note|default:"-" }}</span>
+        <span {% if "推定" in room.note %}class="estimated-value"{% endif %}>{{ room.note|default:"-" }}</span>
+      </div>
+    {% empty %}
+      <div class="empty-result">
+        <strong>積算が作成できませんでした。</strong>
+        {% if project.drawing_pdf %}
+          <span>再計算を押すと、PDF読取から計算をやり直します。</span>
+        {% endif %}
       </div>
     {% endfor %}
   </div>

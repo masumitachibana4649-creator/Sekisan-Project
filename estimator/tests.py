@@ -2,12 +2,13 @@ from decimal import Decimal
 import json
 from unittest.mock import patch
 
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
 from .models import Project, Room
-from .pdf_analysis import analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
+from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
 
 
 class WallpaperEstimateTests(TestCase):
@@ -31,24 +32,26 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(room.total_area.quantize(Decimal("0.01")), Decimal("31.30"))
         self.assertEqual(room.rolls_required, 1)
 
-    def test_project_create_view_saves_rooms_and_redirects(self):
-        response = self.client.post(
-            reverse("project_create"),
-            {
-                "name": "橘邸",
-                "client_name": "橘工務店",
-                "wallpaper_roll_width_m": "0.92",
-                "wallpaper_roll_length_m": "50",
-                "loss_rate_percent": "8",
-                "unit_price_per_roll": "11800",
-                "room_name": ["LDK"],
-                "perimeter_m": ["18"],
-                "height_m": ["2.4"],
-                "opening_area_m2": ["4.2"],
-                "ceiling_area_m2": ["20"],
-                "note": [""],
-            },
+    def test_project_create_view_reads_pdf_and_redirects(self):
+        analysis = PdfAnalysisResult(
+            rooms=[
+                AnalyzedRoom("LDK", Decimal("18"), Decimal("2.4"), Decimal("4.2"), Decimal("20"), "推定開口: 立面図から推定")
+            ],
+            memo="PDF AI読取",
         )
+        with patch("estimator.views.analyze_wallpaper_pdf", return_value=analysis):
+            response = self.client.post(
+                reverse("project_create"),
+                {
+                    "name": "橘邸",
+                    "client_name": "橘工務店",
+                    "drawing_pdf": SimpleUploadedFile("dummy.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
+                    "wallpaper_roll_width_m": "0.92",
+                    "wallpaper_roll_length_m": "50",
+                    "loss_rate_percent": "8",
+                    "unit_price_per_roll": "11800",
+                },
+            )
 
         project = Project.objects.get(name="橘邸")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
@@ -210,30 +213,50 @@ class WallpaperEstimateTests(TestCase):
             with self.assertRaisesMessage(ValueError, "部屋抽出数が不足"):
                 analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
 
-    def test_project_create_falls_back_when_pdf_analysis_has_unexpected_error(self):
+    def test_project_create_does_not_fall_back_when_pdf_analysis_has_unexpected_error(self):
         with patch("estimator.views.analyze_wallpaper_pdf", side_effect=RuntimeError("boom")):
             response = self.client.post(
                 reverse("project_create"),
                 {
                     "name": "PDFエラー案件",
                     "client_name": "橘工務店",
-                    "auto_read_pdf": "on",
                     "drawing_pdf": SimpleUploadedFile("dummy.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
                     "wallpaper_roll_width_m": "0.92",
                     "wallpaper_roll_length_m": "50",
                     "loss_rate_percent": "8",
                     "unit_price_per_roll": "11800",
-                    "room_name": ["LDK"],
-                    "perimeter_m": ["18"],
-                    "height_m": ["2.4"],
-                    "opening_area_m2": ["4.2"],
-                    "ceiling_area_m2": ["20"],
-                    "note": [""],
                 },
             )
 
         project = Project.objects.get(name="PDFエラー案件")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
-        self.assertEqual(project.rooms.count(), 1)
+        self.assertEqual(project.rooms.count(), 0)
+        response_messages = list(get_messages(response.wsgi_request))
+        self.assertEqual([message.tags for message in response_messages], ["error", "error"])
+        self.assertIn("PDF自動読取中に予期しないエラーが発生しました。", str(response_messages[0]))
+        self.assertEqual(str(response_messages[1]), "積算が作成できませんでした。")
+
+    def test_project_recalculate_reads_pdf_again(self):
+        project = Project.objects.create(name="再計算案件", drawing_pdf="drawings/dummy.pdf")
+        Room.objects.create(
+            project=project,
+            name="古い部屋",
+            perimeter_m=Decimal("10"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("5"),
+        )
+        analysis = PdfAnalysisResult(
+            rooms=[
+                AnalyzedRoom("新しいLDK", Decimal("18"), Decimal("2.4"), Decimal("0"), Decimal("20"), "PDF再読取")
+            ],
+            memo="PDF AI読取",
+        )
+
+        with patch("estimator.views.analyze_wallpaper_pdf", return_value=analysis):
+            response = self.client.post(reverse("project_recalculate", args=[project.pk]))
+
+        self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
+        self.assertEqual(list(project.rooms.values_list("name", flat=True)), ["新しいLDK"])
 
 # Create your tests here.
