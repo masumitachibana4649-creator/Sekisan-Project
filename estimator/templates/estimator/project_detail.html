@@ -66,7 +66,7 @@
         <span>{{ room.ceiling_area_m2 }} m2</span>
         <span>{{ room.total_area|floatformat:2 }} m2</span>
         <span>{{ room.rolls_required }} 本</span>
-        <span {% if "推定" in room.note %}class="estimated-value"{% endif %}>{{ room.note|default:"-" }}</span>
+        <span>{{ room.note|default:"-" }}</span>
       </div>
     {% empty %}
       <div class="empty-result">
@@ -84,4 +84,12 @@
   <strong>壁紙・糊・施工工具の広告枠</strong>
   <p>積算計算時に表示する収益化スペース</p>
 </aside>
+
+<div class="loading-overlay" data-loading-overlay role="status" aria-live="polite" aria-hidden="true">
+  <div class="loading-dialog">
+    <div class="loading-spinner" aria-hidden="true"></div>
+    <strong>計算中です</strong>
+    <p>PDF図面を読み取り、部屋情報と積算結果を作成しています。</p>
+  </div>
+</div>
 {% endblock %}
