@@ -11,6 +11,7 @@ register = template.Library()
 @register.filter
 def sentence_breaks(value):
     text = conditional_escape(value or "")
+    text = re.sub(r"^メモ(?:[:：]|\s)*", "メモ<br><br>", text)
     return mark_safe(text.replace("。", "。<br>"))
 
 

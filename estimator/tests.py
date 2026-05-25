@@ -79,14 +79,16 @@ class WallpaperEstimateTests(TestCase):
 
     def test_result_text_filters_insert_sentence_breaks_and_format_confidence(self):
         self.assertEqual(str(sentence_breaks("一文目です。二文目です。")), "一文目です。<br>二文目です。<br>")
+        self.assertEqual(str(sentence_breaks("メモ:施工注意です。")), "メモ<br><br>施工注意です。<br>")
         self.assertEqual(str(room_note("根拠: 図面。AI信頼度: 0.82")), "根拠: 図面。<br>AI信頼度: 82%")
 
-    def test_project_detail_shows_memo_title_with_two_breaks(self):
-        project = Project.objects.create(name="メモ表示テスト", memo="説明文です。")
+    def test_project_detail_shows_entered_memo_without_fixed_title(self):
+        project = Project.objects.create(name="メモ表示テスト", memo="入力した内容です。")
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
 
-        self.assertContains(response, "<strong>メモ</strong><br><br>説明文です。<br>", html=False)
+        self.assertContains(response, "入力した内容です。<br>", html=False)
+        self.assertNotContains(response, "<strong>メモ</strong>", html=False)
 
     def test_project_admin_total_columns_have_japanese_labels(self):
         project_admin = ProjectAdmin(Project, AdminSite())
