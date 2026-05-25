@@ -26,11 +26,47 @@
 <section class="summary-grid">
   <div><span>必要面積</span><strong>{{ project.total_area|floatformat:2 }} m2</strong></div>
   <div><span>ロール本数</span><strong>{{ project.total_rolls }} 本</strong></div>
-  <div><span>概算金額</span><strong>{{ project.total_cost }} 円</strong></div>
-  <div><span>ロス率</span><strong>{{ project.loss_rate_percent }}%</strong></div>
+  <div><span>見積金額</span><strong>{{ project.total_cost }} 円</strong></div>
+  <div><span>採用方式</span><strong>{{ project.get_adopted_estimate_method_display }}</strong></div>
 </section>
 
 <section class="content-band">
+  <div class="section-heading">
+    <h2>壁紙別集計</h2>
+  </div>
+  <div class="method-summary">
+    <div>
+      <span>壁紙別合算方式</span>
+      <strong>{{ summary.wallpaper_total.rolls }} 本 / {{ summary.wallpaper_total.cost }} 円</strong>
+    </div>
+    <div>
+      <span>部屋別積上方式</span>
+      <strong>{{ summary.room_total.rolls }} 本 / {{ summary.room_total.cost }} 円</strong>
+    </div>
+  </div>
+  <div class="wallpaper-summary-table">
+    <div class="wallpaper-summary-head">
+      <span>壁紙</span><span>面積</span><span>壁面</span><span>天井</span><span>ロス率</span><span>壁紙別合算</span><span>部屋別積上</span>
+    </div>
+    {% for row in summary.rows %}
+      <div class="wallpaper-summary-row">
+        <strong>{{ row.wallpaper_no }}：{{ row.wallpaper_name }}</strong>
+        <span>{{ row.base_area|floatformat:2 }} m2</span>
+        <span>{{ row.wall_area|floatformat:2 }} m2</span>
+        <span>{{ row.ceiling_area|floatformat:2 }} m2</span>
+        <span>{{ row.loss_rate_percent }}%</span>
+        <span>{{ row.wallpaper_total_rolls }} 本 / {{ row.wallpaper_total_cost }} 円</span>
+        <span>{{ row.room_total_rolls }} 本 / {{ row.room_total_cost }} 円</span>
+      </div>
+    {% empty %}
+      <div class="empty-result"><strong>壁紙集計対象がありません。</strong></div>
+    {% endfor %}
+  </div>
+</section>
+
+<form method="post" action="{% url 'project_save_wallpapers' project.pk %}" data-wallpaper-save-form data-original-project-name="{{ project.name }}">
+  {% csrf_token %}
+  <section class="content-band">
   <div class="section-heading">
     <h2>部屋別明細</h2>
     {% if project.drawing_pdf %}
@@ -57,16 +93,47 @@
   {% endif %}
   <div class="result-table">
     <div class="result-head">
-      <span>部屋名</span><span>壁面</span><span>開口</span><span>天井</span><span>必要面積</span><span>本数</span><span>備考</span>
+      <span>部屋名</span><span>東壁面</span><span>西壁面</span><span>南壁面</span><span>北壁面</span><span>天井</span><span>面積/本数</span><span>備考</span>
     </div>
     {% for room in rooms %}
       <div class="result-row">
         <strong>{{ room.name }}</strong>
-        <span>{{ room.wall_area|floatformat:2 }} m2</span>
-        <span {% if room.opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %}>{{ room.opening_area_m2 }} m2</span>
-        <span>{{ room.ceiling_area_m2 }} m2</span>
-        <span>{{ room.total_area|floatformat:2 }} m2</span>
-        <span>{{ room.rolls_required }} 本</span>
+        <span>
+          <select name="room_{{ room.pk }}_east_wallpaper_no">
+            {% for wallpaper in wallpapers %}
+              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.east_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+            {% endfor %}
+          </select>
+        </span>
+        <span>
+          <select name="room_{{ room.pk }}_west_wallpaper_no">
+            {% for wallpaper in wallpapers %}
+              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.west_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+            {% endfor %}
+          </select>
+        </span>
+        <span>
+          <select name="room_{{ room.pk }}_south_wallpaper_no">
+            {% for wallpaper in wallpapers %}
+              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.south_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+            {% endfor %}
+          </select>
+        </span>
+        <span>
+          <select name="room_{{ room.pk }}_north_wallpaper_no">
+            {% for wallpaper in wallpapers %}
+              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.north_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+            {% endfor %}
+          </select>
+        </span>
+        <span>
+          <select name="room_{{ room.pk }}_ceiling_wallpaper_no">
+            {% for wallpaper in wallpapers %}
+              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.ceiling_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+            {% endfor %}
+          </select>
+        </span>
+        <span>{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
         <span>{{ room.note|room_note }}</span>
       </div>
     {% empty %}
@@ -78,7 +145,31 @@
       </div>
     {% endfor %}
   </div>
-</section>
+  </section>
+
+  <section class="content-band save-band">
+    <div class="section-heading">
+      <h2>見積方式と保存</h2>
+      <button class="primary-action" type="submit">壁紙設定を保存</button>
+    </div>
+    <div class="form-grid">
+      <label>採用見積方式
+        <select name="adopted_estimate_method">
+          {% for value, label in estimate_methods %}
+            <option value="{{ value }}" {% if value == project.adopted_estimate_method %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="wide">保存案件名
+        <input name="save_project_name" value="{{ suggested_project_name }}" required>
+      </label>
+      <label class="check-field">
+        <input type="checkbox" name="confirm_overwrite" value="1">
+        <span>元案件名と同じ場合は上書きする</span>
+      </label>
+    </div>
+  </section>
+</form>
 
 <aside class="ad-slot wide-ad">
   <span>AD</span>

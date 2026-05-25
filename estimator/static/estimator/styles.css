@@ -302,7 +302,8 @@ h2 {
   gap: 14px;
 }
 
-.page-map-grid {
+.page-map-grid,
+.wallpaper-select-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
@@ -367,9 +368,9 @@ textarea { resize: vertical; }
 .result-head,
 .result-row {
   display: grid;
-  grid-template-columns: minmax(130px, 1.1fr) minmax(82px, 0.7fr) minmax(82px, 0.7fr) minmax(82px, 0.7fr) minmax(98px, 0.8fr) minmax(64px, 0.5fr) minmax(320px, 2.6fr);
+  grid-template-columns: minmax(130px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(260px, 1.8fr);
   gap: 10px;
-  min-width: 1140px;
+  min-width: 1320px;
   align-items: start;
 }
 
@@ -413,6 +414,61 @@ textarea { resize: vertical; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-top: 18px;
+}
+
+.method-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.method-summary div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: #f7f5ef;
+}
+
+.method-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 7px;
+}
+
+.method-summary strong {
+  font-size: 22px;
+}
+
+.wallpaper-summary-table {
+  overflow-x: auto;
+}
+
+.wallpaper-summary-head,
+.wallpaper-summary-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(4, minmax(88px, 0.7fr)) repeat(2, minmax(160px, 1fr));
+  gap: 10px;
+  min-width: 980px;
+  align-items: start;
+}
+
+.wallpaper-summary-head {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 0 8px;
+}
+
+.wallpaper-summary-row {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.wallpaper-summary-row:nth-child(odd) {
+  background: #eef8fb;
 }
 
 .result-row span,
@@ -476,6 +532,10 @@ textarea { resize: vertical; }
 
 .wide-ad {
   margin-bottom: 0;
+}
+
+.save-band {
+  margin-top: 24px;
 }
 
 .messages {
@@ -553,6 +613,8 @@ textarea { resize: vertical; }
   .two-column,
   .form-grid,
   .page-map-grid,
+  .wallpaper-select-grid,
+  .method-summary,
   .summary-grid {
     grid-template-columns: 1fr;
   }

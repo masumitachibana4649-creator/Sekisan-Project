@@ -5,7 +5,7 @@ from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.models import Group, Permission
 from django.contrib.admin.widgets import FilteredSelectMultiple
 
-from .models import EstimateDefaultSettings, Project, Room
+from .models import EstimateDefaultSettings, Project, Room, Wallpaper
 
 
 PERMISSION_ACTIONS = {
@@ -23,6 +23,71 @@ MODEL_LABELS = {
 class RoomInline(admin.TabularInline):
     model = Room
     extra = 1
+    fields = (
+        "name",
+        "perimeter_m",
+        "height_m",
+        "opening_area_m2",
+        "ceiling_area_m2",
+        "east_wallpaper_name",
+        "west_wallpaper_name",
+        "south_wallpaper_name",
+        "north_wallpaper_name",
+        "ceiling_wallpaper_name",
+        "note",
+    )
+    readonly_fields = (
+        "east_wallpaper_name",
+        "west_wallpaper_name",
+        "south_wallpaper_name",
+        "north_wallpaper_name",
+        "ceiling_wallpaper_name",
+    )
+
+
+@admin.register(Wallpaper)
+class WallpaperAdmin(admin.ModelAdmin):
+    list_display = (
+        "display_order",
+        "number",
+        "name",
+        "roll_width_m",
+        "roll_length_m",
+        "loss_rate_percent",
+        "unit_price_per_roll",
+        "is_active",
+    )
+    list_display_links = ("number",)
+    list_editable = ("display_order", "is_active")
+    search_fields = ("number", "name")
+    ordering = ("display_order", "number")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.number == "000":
+            return (
+                "display_order",
+                "number",
+                "name",
+                "roll_width_m",
+                "roll_length_m",
+                "loss_rate_percent",
+                "unit_price_per_roll",
+                "is_active",
+            )
+        if obj and obj.number == "001":
+            return (
+                "number",
+                "name",
+                "roll_width_m",
+                "roll_length_m",
+                "loss_rate_percent",
+                "unit_price_per_roll",
+                "is_active",
+            )
+        return ()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Project)
@@ -43,11 +108,17 @@ class ProjectAdmin(admin.ModelAdmin):
 @admin.register(EstimateDefaultSettings)
 class EstimateDefaultSettingsAdmin(admin.ModelAdmin):
     fields = (
+        "default_wallpaper",
         "wallpaper_roll_width_m",
         "wallpaper_roll_length_m",
         "loss_rate_percent",
         "unit_price_per_roll",
     )
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "default_wallpaper":
+            kwargs["queryset"] = Wallpaper.objects.filter(is_active=True).order_by("display_order", "number")
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_add_permission(self, request):
         return not EstimateDefaultSettings.objects.exists()

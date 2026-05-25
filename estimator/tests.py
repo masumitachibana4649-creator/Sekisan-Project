@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .admin import ProjectAdmin
-from .models import Project, Room
+from .models import ROOM_TOTAL_METHOD, Project, Room, Wallpaper
 from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
@@ -118,7 +118,93 @@ class WallpaperEstimateTests(TestCase):
 
         self.assertEqual(project.rooms.count(), 13)
         self.assertEqual(project.total_area.quantize(Decimal("0.01")), Decimal("472.04"))
-        self.assertEqual(project.total_rolls, 16)
+        self.assertEqual(project.total_rolls, 11)
+        self.assertEqual(project.wallpaper_summary["room_total"]["rolls"], 16)
+
+    def test_multiple_wallpapers_are_grouped_by_wallpaper_and_room(self):
+        project = Project.objects.create(name="複数壁紙テスト")
+        accent = Wallpaper.objects.create(
+            display_order="002",
+            number="002",
+            name="アクセント",
+            roll_width_m=Decimal("0.92"),
+            roll_length_m=Decimal("10"),
+            loss_rate_percent=Decimal("8"),
+            unit_price_per_roll=5000,
+        )
+        room_a = Room.objects.create(
+            project=project,
+            name="A部屋",
+            perimeter_m=Decimal("20"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("0"),
+        )
+        room_b = Room.objects.create(
+            project=project,
+            name="B部屋",
+            perimeter_m=Decimal("20"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("0"),
+        )
+        for room in (room_a, room_b):
+            room.apply_wallpaper_to_all_surfaces(accent)
+            room.save()
+
+        summary = project.wallpaper_summary
+
+        self.assertEqual(summary["wallpaper_total"]["rolls"], 12)
+        self.assertEqual(summary["room_total"]["rolls"], 12)
+        self.assertEqual(summary["rows"][0]["wallpaper_no"], "002")
+
+    def test_project_uses_room_total_method_when_selected(self):
+        project = Project.objects.create(name="採用方式テスト", adopted_estimate_method=ROOM_TOTAL_METHOD)
+        for room_name in ("A部屋", "B部屋"):
+            Room.objects.create(
+                project=project,
+                name=room_name,
+                perimeter_m=Decimal("20"),
+                height_m=Decimal("2.4"),
+                opening_area_m2=Decimal("0"),
+                ceiling_area_m2=Decimal("0"),
+            )
+
+        self.assertEqual(project.wallpaper_summary["wallpaper_total"]["rolls"], 3)
+        self.assertEqual(project.wallpaper_summary["room_total"]["rolls"], 4)
+        self.assertEqual(project.total_rolls, 4)
+
+    def test_project_save_wallpapers_creates_revision_with_selected_method(self):
+        Wallpaper.ensure_defaults()
+        project = Project.objects.create(name="保存元")
+        room = Room.objects.create(
+            project=project,
+            name="LDK",
+            perimeter_m=Decimal("18"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("20"),
+        )
+
+        response = self.client.post(
+            reverse("project_save_wallpapers", args=[project.pk]),
+            {
+                "save_project_name": "保存元修正",
+                "adopted_estimate_method": ROOM_TOTAL_METHOD,
+                f"room_{room.pk}_east_wallpaper_no": "000",
+                f"room_{room.pk}_west_wallpaper_no": "001",
+                f"room_{room.pk}_south_wallpaper_no": "001",
+                f"room_{room.pk}_north_wallpaper_no": "001",
+                f"room_{room.pk}_ceiling_wallpaper_no": "001",
+            },
+        )
+
+        revision = Project.objects.get(name="保存元修正")
+        revision_room = revision.rooms.get()
+        self.assertRedirects(response, reverse("project_detail", args=[revision.pk]))
+        self.assertEqual(revision.adopted_estimate_method, ROOM_TOTAL_METHOD)
+        self.assertEqual(revision_room.east_wallpaper_no, "000")
+        self.assertEqual(project.rooms.get().east_wallpaper_no, "001")
 
     def test_sample_pdf_analysis_uses_only_existing_plan_pages(self):
         project = Project.objects.create(
