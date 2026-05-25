@@ -38,7 +38,7 @@
     {% endif %}
   </div>
   {% if project.memo %}
-    <p class="memo-box">{{ project.memo|sentence_breaks }}</p>
+    <p class="memo-box"><strong>メモ</strong><br><br>{{ project.memo|sentence_breaks }}</p>
   {% endif %}
   {% if has_estimated_openings %}
     <p class="estimate-note">青文字は立面図・平面図の縮尺と既知寸法からの推定値なので注意</p>
