@@ -12,7 +12,14 @@ register = template.Library()
 def sentence_breaks(value):
     text = conditional_escape(value or "")
     text = re.sub(r"^メモ(?:[:：]|\s)*", "メモ<br><br>", text)
-    return mark_safe(text.replace("。", "。<br>"))
+    paragraphs = re.split(r"\r?\n+", text)
+    formatted = []
+    for index, paragraph in enumerate(paragraphs):
+        paragraph = paragraph.replace("。", "。<br>")
+        if index < len(paragraphs) - 1:
+            paragraph = paragraph.removesuffix("<br>")
+        formatted.append(paragraph)
+    return mark_safe("<br><br>".join(formatted))
 
 
 @register.filter
