@@ -27,34 +27,60 @@
   font-weight: normal;
 }
 
-body.model-wallpaper.change-list #result_list .column-display_order {
-  width: 5em;
+body.model-wallpaper.change-list #result_list {
+  table-layout: fixed;
+  width: 100%;
 }
 
-body.model-wallpaper.change-list #result_list .column-name {
-  width: 28em;
+body.model-wallpaper.change-list #result_list .column-display_order,
+body.model-wallpaper.change-list #result_list .field-display_order {
+  width: 5em !important;
+  max-width: 5em;
+}
+
+body.model-wallpaper.change-list #result_list .field-display_order input {
+  width: 4em;
+}
+
+body.model-wallpaper.change-list #result_list .column-name,
+body.model-wallpaper.change-list #result_list .field-name {
+  width: 32em !important;
+  max-width: 32em;
 }
 
 body.model-user.change-list #result_list .column-email,
 body.model-user.change-list #result_list .column-first_name,
-body.model-user.change-list #result_list .column-last_name {
-  width: 18em;
+body.model-user.change-list #result_list .column-last_name,
+body.model-user.change-list #result_list .field-email,
+body.model-user.change-list #result_list .field-first_name,
+body.model-user.change-list #result_list .field-last_name {
+  width: 18em !important;
+  max-width: 18em;
 }
 
-body.model-user.change-list #changelist {
-  display: flex;
-  flex-direction: column;
+body.model-user.change-list #result_list {
+  table-layout: fixed;
+  width: 100%;
+}
+
+body.model-user.change-list #content-main #changelist {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 body.model-user.change-list #toolbar {
-  order: 1;
+  grid-row: 1;
+  grid-column: 1;
 }
 
 body.model-user.change-list #changelist-filter {
-  position: static;
-  order: 2;
-  width: auto;
-  margin: 0 0 14px;
+  position: static !important;
+  grid-row: 2;
+  grid-column: 1;
+  width: 100% !important;
+  max-width: none;
+  box-sizing: border-box;
+  margin: 0 0 14px !important;
   padding: 12px 14px;
   border: 1px solid var(--hairline-color);
   border-radius: 4px;
@@ -62,11 +88,14 @@ body.model-user.change-list #changelist-filter {
 }
 
 body.model-user.change-list #changelist-form {
-  order: 3;
+  grid-row: 3;
+  grid-column: 1;
+  margin-right: 0 !important;
 }
 
 body.model-user.change-list #changelist-filter h2 {
-  margin: 0 0 10px;
+  display: inline-block;
+  margin: 0 18px 10px 0;
 }
 
 body.model-user.change-list #changelist-filter h3 {
@@ -78,7 +107,7 @@ body.model-user.change-list #changelist-filter details {
   display: inline-block;
   vertical-align: top;
   width: 23%;
-  min-width: 180px;
+  min-width: 210px;
   margin: 0 1.5% 10px 0;
 }
 

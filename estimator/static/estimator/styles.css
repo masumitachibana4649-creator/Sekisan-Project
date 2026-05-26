@@ -377,9 +377,9 @@ textarea { resize: vertical; }
 .result-row,
 .room-detail-group {
   display: grid;
-  grid-template-columns: minmax(130px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(260px, 1.8fr);
+  grid-template-columns: minmax(130px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
   gap: 10px;
-  min-width: 1320px;
+  min-width: 1580px;
   align-items: start;
 }
 
@@ -533,12 +533,6 @@ textarea { resize: vertical; }
 
 .estimate-note,
 .estimated-value {
-  color: #1565c0;
-}
-
-.has-estimated-values input,
-.has-estimated-values .room-total-cell,
-.has-estimated-values .room-note-cell {
   color: #1565c0;
 }
 
