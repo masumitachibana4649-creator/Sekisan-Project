@@ -2,7 +2,8 @@ from django import forms
 from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.models import Group, Permission, User
 from django.contrib.admin.widgets import FilteredSelectMultiple
 
 from .models import EstimateDefaultSettings, Project, Room, Wallpaper
@@ -61,6 +62,9 @@ class WallpaperAdmin(admin.ModelAdmin):
     list_editable = ("display_order", "is_active")
     search_fields = ("number", "name")
     ordering = ("display_order", "number")
+
+    class Media:
+        css = {"all": ("estimator/admin.css",)}
 
     def get_readonly_fields(self, request, obj=None):
         if obj and obj.number == "000":
@@ -165,8 +169,19 @@ class GroupAdmin(DjangoGroupAdmin):
         css = {"all": ("estimator/admin.css",)}
 
 
+class UserAdmin(DjangoUserAdmin):
+    list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_superuser", "is_active")
+    list_filter = ("is_staff", "is_superuser", "is_active", "groups")
+    search_fields = ("username", "email", "first_name", "last_name")
+
+    class Media:
+        css = {"all": ("estimator/admin.css",)}
+
+
 admin.site.unregister(Group)
 admin.site.register(Group, GroupAdmin)
+admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
 
 
 def _app_verbose_name(app_label):

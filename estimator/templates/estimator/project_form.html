@@ -32,7 +32,7 @@
           <select name="{{ field }}_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.pk == default_wallpaper.pk %}selected{% endif %}>
-                {{ wallpaper.number }}：{{ wallpaper.name }} / 幅{{ wallpaper.roll_width_m }}m / 長さ{{ wallpaper.roll_length_m }}m / ロス{{ wallpaper.loss_rate_percent }}% / {{ wallpaper.unit_price_per_roll }}円
+                {{ wallpaper.number }}：{{ wallpaper.name }} / {{ wallpaper.unit_price_per_roll }}円
               </option>
             {% endfor %}
           </select>

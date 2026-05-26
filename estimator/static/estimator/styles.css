@@ -317,11 +317,6 @@ h2 {
   grid-column: span 2;
 }
 
-.wallpaper-select-field:nth-child(1),
-.wallpaper-select-field:nth-child(2) {
-  grid-column: span 3;
-}
-
 .hint-text {
   color: var(--muted);
   margin-bottom: 18px;
@@ -379,7 +374,8 @@ textarea { resize: vertical; }
 }
 
 .result-head,
-.result-row {
+.result-row,
+.room-detail-group {
   display: grid;
   grid-template-columns: minmax(130px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(260px, 1.8fr);
   gap: 10px;
@@ -396,41 +392,43 @@ textarea { resize: vertical; }
 }
 
 .room-line,
-.result-row {
+.result-row,
+.room-detail-group {
   padding: 10px 12px;
   border-top: 1px solid var(--line);
 }
 
-.room-wallpaper-row {
+.room-detail-group {
   margin-top: 10px;
 }
 
-.room-wallpaper-row select {
-  font-size: 16px;
+.room-wallpaper-cell select {
+  font-size: 14px;
   font-weight: 700;
 }
 
-.room-measure-row,
-.room-opening-row {
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-
-.room-measure-row strong,
-.room-opening-row strong {
+.room-sub-label {
   color: var(--muted);
   font-size: 13px;
 }
 
-.room-measure-row input,
-.room-opening-row input {
+.room-detail-group input {
   min-height: 38px;
   padding: 8px 10px;
 }
 
-.result-table .room-wallpaper-row:nth-of-type(6n + 2),
-.result-table .room-wallpaper-row:nth-of-type(6n + 2) + .room-measure-row,
-.result-table .room-wallpaper-row:nth-of-type(6n + 2) + .room-measure-row + .room-opening-row {
+.room-note-cell {
+  grid-column: 8;
+  grid-row: 1 / span 3;
+  line-height: 1.55;
+}
+
+.room-total-cell {
+  grid-column: 7;
+  grid-row: 1;
+}
+
+.result-table .room-detail-group:nth-of-type(odd) {
   background: #eef8fb;
 }
 
@@ -519,7 +517,8 @@ textarea { resize: vertical; }
   white-space: normal;
 }
 
-.result-row span:last-child {
+.result-row span:last-child,
+.room-note-cell {
   line-height: 1.55;
 }
 
@@ -534,6 +533,12 @@ textarea { resize: vertical; }
 
 .estimate-note,
 .estimated-value {
+  color: #1565c0;
+}
+
+.has-estimated-values input,
+.has-estimated-values .room-total-cell,
+.has-estimated-values .room-note-cell {
   color: #1565c0;
 }
 

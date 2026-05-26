@@ -26,3 +26,69 @@
   font-size: 0.86em;
   font-weight: normal;
 }
+
+body.model-wallpaper.change-list #result_list .column-display_order {
+  width: 5em;
+}
+
+body.model-wallpaper.change-list #result_list .column-name {
+  width: 28em;
+}
+
+body.model-user.change-list #result_list .column-email,
+body.model-user.change-list #result_list .column-first_name,
+body.model-user.change-list #result_list .column-last_name {
+  width: 18em;
+}
+
+body.model-user.change-list #changelist {
+  display: flex;
+  flex-direction: column;
+}
+
+body.model-user.change-list #toolbar {
+  order: 1;
+}
+
+body.model-user.change-list #changelist-filter {
+  position: static;
+  order: 2;
+  width: auto;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline-color);
+  border-radius: 4px;
+  background: var(--body-bg);
+}
+
+body.model-user.change-list #changelist-form {
+  order: 3;
+}
+
+body.model-user.change-list #changelist-filter h2 {
+  margin: 0 0 10px;
+}
+
+body.model-user.change-list #changelist-filter h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+body.model-user.change-list #changelist-filter details {
+  display: inline-block;
+  vertical-align: top;
+  width: 23%;
+  min-width: 180px;
+  margin: 0 1.5% 10px 0;
+}
+
+body.model-user.change-list #changelist-filter ul {
+  margin: 0;
+  padding: 0;
+}
+
+body.model-user.change-list #changelist-filter li {
+  display: inline-block;
+  margin: 0 8px 6px 0;
+  white-space: nowrap;
+}
