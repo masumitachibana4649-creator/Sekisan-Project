@@ -91,6 +91,9 @@ main {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.84)),
+    url("dashboard-wallpaper-no7.png") center / cover;
 }
 
 .page-kicker {
@@ -141,6 +144,13 @@ h2 {
   font-size: 24px;
 }
 
+.metric-strip div:not(:last-child) strong,
+.summary-grid div:not(:last-child) strong,
+.method-summary strong {
+  display: block;
+  text-align: right;
+}
+
 .primary-action,
 .secondary-action,
 .icon-link {
@@ -175,46 +185,20 @@ h2 {
 }
 
 .drawing-panel {
-  padding: 22px;
-  background:
-    linear-gradient(rgba(47, 111, 86, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(47, 111, 86, 0.08) 1px, transparent 1px),
-    var(--blueprint);
-  background-size: 26px 26px;
+  padding: 12px;
+  display: grid;
+  place-items: center;
+  background: #fff;
 }
 
-.plan-card {
-  position: relative;
+.dashboard-plan {
   width: 100%;
   height: 100%;
   min-height: 360px;
-  border: 3px solid #274c41;
-  background: rgba(255, 255, 255, 0.48);
+  display: block;
+  object-fit: contain;
+  object-position: center;
 }
-
-.room-shape {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  border: 2px solid #274c41;
-  background: rgba(255, 255, 255, 0.7);
-  font-weight: 800;
-  color: #274c41;
-}
-
-.living { inset: 24px 36% 42% 24px; }
-.hall { inset: 60% 36% 24px 24px; }
-.bed { inset: 24px 24px 52% 67%; }
-.bath { inset: 53% 24px 24px 67%; }
-
-.measure {
-  position: absolute;
-  color: var(--gold);
-  font-weight: 900;
-}
-
-.measure.horizontal { left: 34px; bottom: 34%; }
-.measure.vertical { right: 28%; top: 46%; transform: rotate(90deg); }
 
 .two-column {
   display: grid;
@@ -265,6 +249,7 @@ h2 {
   font-weight: 900;
   color: var(--green);
   white-space: nowrap;
+  text-align: right;
 }
 
 .empty-state {
@@ -357,6 +342,10 @@ input, textarea, select {
   font: inherit;
 }
 
+input[type="number"] {
+  text-align: right;
+}
+
 textarea { resize: vertical; }
 .wide { grid-column: span 2; }
 
@@ -426,6 +415,13 @@ textarea { resize: vertical; }
 .room-total-cell {
   grid-column: 7;
   grid-row: 1;
+  text-align: right;
+}
+
+.result-row span:nth-child(n+2):not(:last-child),
+.room-detail-group > span:not(.room-wallpaper-cell):not(.room-note-cell),
+.wallpaper-summary-row span {
+  text-align: right;
 }
 
 .result-table .room-detail-group:nth-of-type(odd) {

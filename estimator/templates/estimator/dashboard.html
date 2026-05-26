@@ -1,4 +1,5 @@
 {% extends "estimator/base.html" %}
+{% load static %}
 {% block title %}ダッシュボード | 壁紙積算システム{% endblock %}
 
 {% block content %}
@@ -23,14 +24,7 @@
     <a class="primary-action" href="{% url 'project_create' %}">積算を開始</a>
   </div>
   <aside class="drawing-panel" aria-label="図面プレビュー">
-    <div class="plan-card">
-      <div class="room-shape living">LDK</div>
-      <div class="room-shape hall">廊下</div>
-      <div class="room-shape bed">洋室</div>
-      <div class="room-shape bath">洗面</div>
-      <div class="measure horizontal">7.2m</div>
-      <div class="measure vertical">2.4m</div>
-    </div>
+    <img class="dashboard-plan" src="{% static 'estimator/dashboard-plan.png' %}" alt="平面図プレビュー">
   </aside>
 </section>
 
