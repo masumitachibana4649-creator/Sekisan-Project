@@ -28,7 +28,7 @@
     <p class="hint-text">新規案件では、各面に初期設定する壁紙を選択します。幅・長さ・ロス率・単価は壁紙マスタの値を使用します。</p>
     <div class="wallpaper-select-grid">
       {% for field, label, surface_type in surface_fields %}
-        <label>{{ label }}
+        <label class="wallpaper-select-field">{{ label }}
           <select name="{{ field }}_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.pk == default_wallpaper.pk %}selected{% endif %}>

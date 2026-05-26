@@ -139,6 +139,18 @@ def project_save_wallpapers(request, pk):
             wallpaper = wallpaper_map.get(selected_no)
             if wallpaper:
                 target_room.apply_wallpaper(field, wallpaper)
+            setattr(
+                target_room,
+                f"{field}_surface_area_m2",
+                _decimal(request.POST.get(f"room_{source_room_id}_{field}_surface_area_m2"), getattr(target_room, f"{field}_surface_area_m2")),
+            )
+            if _surface_type == "wall":
+                setattr(
+                    target_room,
+                    f"{field}_opening_area_m2",
+                    _decimal(request.POST.get(f"room_{source_room_id}_{field}_opening_area_m2"), getattr(target_room, f"{field}_opening_area_m2")),
+                )
+        target_room.sync_totals_from_surface_measurements()
         target_room.save()
 
     messages.success(request, f"{target_project.name} として壁紙設定を保存しました。")
@@ -275,6 +287,7 @@ def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None,
         )
         for field, _label, _surface_type in SURFACE_FIELDS:
             created.apply_wallpaper(field, surface_wallpapers.get(field, default_wallpaper))
+        created.set_default_surface_measurements()
         created.save()
 
 

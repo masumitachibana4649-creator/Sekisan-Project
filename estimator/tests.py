@@ -196,6 +196,15 @@ class WallpaperEstimateTests(TestCase):
                 f"room_{room.pk}_south_wallpaper_no": "001",
                 f"room_{room.pk}_north_wallpaper_no": "001",
                 f"room_{room.pk}_ceiling_wallpaper_no": "001",
+                f"room_{room.pk}_east_surface_area_m2": "12.00",
+                f"room_{room.pk}_west_surface_area_m2": "10.00",
+                f"room_{room.pk}_south_surface_area_m2": "9.00",
+                f"room_{room.pk}_north_surface_area_m2": "8.00",
+                f"room_{room.pk}_ceiling_surface_area_m2": "20.00",
+                f"room_{room.pk}_east_opening_area_m2": "1.00",
+                f"room_{room.pk}_west_opening_area_m2": "0.50",
+                f"room_{room.pk}_south_opening_area_m2": "0.25",
+                f"room_{room.pk}_north_opening_area_m2": "0.00",
             },
         )
 
@@ -204,6 +213,9 @@ class WallpaperEstimateTests(TestCase):
         self.assertRedirects(response, reverse("project_detail", args=[revision.pk]))
         self.assertEqual(revision.adopted_estimate_method, ROOM_TOTAL_METHOD)
         self.assertEqual(revision_room.east_wallpaper_no, "000")
+        self.assertEqual(revision_room.east_surface_area_m2, Decimal("12.00"))
+        self.assertEqual(revision_room.opening_area_m2, Decimal("1.75"))
+        self.assertEqual(revision_room.ceiling_area_m2, Decimal("20.00"))
         self.assertEqual(project.rooms.get().east_wallpaper_no, "001")
 
     def test_sample_pdf_analysis_uses_only_existing_plan_pages(self):

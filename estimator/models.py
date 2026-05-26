@@ -276,6 +276,15 @@ class Room(models.Model):
     opening_area_m2 = models.DecimalField("開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
     ceiling_area_m2 = models.DecimalField("天井面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
     note = models.CharField("備考", max_length=160, blank=True)
+    east_surface_area_m2 = models.DecimalField("東壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    west_surface_area_m2 = models.DecimalField("西壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    south_surface_area_m2 = models.DecimalField("南壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    north_surface_area_m2 = models.DecimalField("北壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    ceiling_surface_area_m2 = models.DecimalField("天井 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    east_opening_area_m2 = models.DecimalField("東壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    west_opening_area_m2 = models.DecimalField("西壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    south_opening_area_m2 = models.DecimalField("南壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    north_opening_area_m2 = models.DecimalField("北壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
     east_wallpaper_no = models.CharField("東壁面 壁紙No.", max_length=3, default="001")
     east_wallpaper_name = models.CharField("東壁面 壁紙名称", max_length=80, default="標準壁紙")
     east_roll_width_m = models.DecimalField("東壁面 ロール幅(m)", max_digits=5, decimal_places=2, default=Decimal("0.92"))
@@ -317,8 +326,28 @@ class Room(models.Model):
 
     @property
     def wall_area(self):
+        if self.has_surface_measurements:
+            return sum((self.net_surface_area(field) for field, _label, surface_type in SURFACE_FIELDS if surface_type == "wall"), Decimal("0"))
         area = (self.perimeter_m * self.height_m) - self.opening_area_m2
         return max(area, 0)
+
+    @property
+    def has_surface_measurements(self):
+        return any(
+            getattr(self, f"{field}_surface_area_m2") > 0
+            for field, _label, _surface_type in SURFACE_FIELDS
+        ) or any(
+            getattr(self, f"{field}_opening_area_m2") > 0
+            for field, _label, surface_type in SURFACE_FIELDS
+            if surface_type == "wall"
+        )
+
+    def net_surface_area(self, field):
+        surface_area = getattr(self, f"{field}_surface_area_m2")
+        if field == "ceiling":
+            return max(surface_area, Decimal("0"))
+        opening_area = getattr(self, f"{field}_opening_area_m2")
+        return max(surface_area - opening_area, Decimal("0"))
 
     @property
     def wallpaper_area(self):
@@ -339,10 +368,19 @@ class Room(models.Model):
         return sum((_ceil_rolls(group["required_area"], group["roll_area"]) for group in groups.values()), start=0)
 
     def wallpaper_surface_items(self):
-        wall_face_area = self.wall_area / Decimal("4")
+        derived_wall_face_area = max((self.perimeter_m * self.height_m) - self.opening_area_m2, Decimal("0")) / Decimal("4")
+        derived_wall_opening_area = self.opening_area_m2 / Decimal("4")
+        use_surface_measurements = self.has_surface_measurements
         items = []
         for field, label, surface_type in SURFACE_FIELDS:
-            base_area = self.ceiling_area_m2 if field == "ceiling" else wall_face_area
+            if use_surface_measurements:
+                base_area = self.net_surface_area(field)
+                surface_area = getattr(self, f"{field}_surface_area_m2")
+                opening_area = Decimal("0") if field == "ceiling" else getattr(self, f"{field}_opening_area_m2")
+            else:
+                base_area = self.ceiling_area_m2 if field == "ceiling" else derived_wall_face_area
+                surface_area = self.ceiling_area_m2 if field == "ceiling" else derived_wall_face_area + derived_wall_opening_area
+                opening_area = Decimal("0") if field == "ceiling" else derived_wall_opening_area
             wallpaper_no = getattr(self, f"{field}_wallpaper_no")
             loss_rate = getattr(self, f"{field}_loss_rate_percent")
             roll_width = getattr(self, f"{field}_roll_width_m")
@@ -355,6 +393,8 @@ class Room(models.Model):
                 "surface_type": surface_type,
                 "wallpaper_no": wallpaper_no,
                 "wallpaper_name": getattr(self, f"{field}_wallpaper_name"),
+                "surface_area": surface_area,
+                "opening_area": opening_area,
                 "base_area": base_area,
                 "required_area": Decimal("0") if wallpaper_no == "000" else base_area * multiplier,
                 "loss_rate_percent": loss_rate,
@@ -384,6 +424,24 @@ class Room(models.Model):
         setattr(self, f"{field}_roll_length_m", wallpaper.roll_length_m)
         setattr(self, f"{field}_loss_rate_percent", wallpaper.loss_rate_percent)
         setattr(self, f"{field}_unit_price_per_roll", wallpaper.unit_price_per_roll)
+
+    def set_default_surface_measurements(self):
+        wall_gross_area = self.perimeter_m * self.height_m
+        wall_surface_area = wall_gross_area / Decimal("4")
+        wall_opening_area = self.opening_area_m2 / Decimal("4")
+        for field, _label, surface_type in SURFACE_FIELDS:
+            if surface_type == "ceiling":
+                setattr(self, f"{field}_surface_area_m2", self.ceiling_area_m2)
+            else:
+                setattr(self, f"{field}_surface_area_m2", wall_surface_area)
+                setattr(self, f"{field}_opening_area_m2", wall_opening_area)
+
+    def sync_totals_from_surface_measurements(self):
+        self.opening_area_m2 = sum(
+            (getattr(self, f"{field}_opening_area_m2") for field, _label, surface_type in SURFACE_FIELDS if surface_type == "wall"),
+            Decimal("0"),
+        )
+        self.ceiling_area_m2 = self.ceiling_surface_area_m2
 
 
 def _normalize_code(value):

@@ -96,38 +96,38 @@
       <span>部屋名</span><span>東壁面</span><span>西壁面</span><span>南壁面</span><span>北壁面</span><span>天井</span><span>面積/本数</span><span>備考</span>
     </div>
     {% for room in rooms %}
-      <div class="result-row">
+      <div class="result-row room-wallpaper-row">
         <strong>{{ room.name }}</strong>
         <span>
-          <select name="room_{{ room.pk }}_east_wallpaper_no">
+          <select class="room-wallpaper-select" name="room_{{ room.pk }}_east_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.east_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
             {% endfor %}
           </select>
         </span>
         <span>
-          <select name="room_{{ room.pk }}_west_wallpaper_no">
+          <select class="room-wallpaper-select" name="room_{{ room.pk }}_west_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.west_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
             {% endfor %}
           </select>
         </span>
         <span>
-          <select name="room_{{ room.pk }}_south_wallpaper_no">
+          <select class="room-wallpaper-select" name="room_{{ room.pk }}_south_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.south_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
             {% endfor %}
           </select>
         </span>
         <span>
-          <select name="room_{{ room.pk }}_north_wallpaper_no">
+          <select class="room-wallpaper-select" name="room_{{ room.pk }}_north_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.north_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
             {% endfor %}
           </select>
         </span>
         <span>
-          <select name="room_{{ room.pk }}_ceiling_wallpaper_no">
+          <select class="room-wallpaper-select" name="room_{{ room.pk }}_ceiling_wallpaper_no">
             {% for wallpaper in wallpapers %}
               <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.ceiling_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
             {% endfor %}
@@ -135,6 +135,26 @@
         </span>
         <span>{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
         <span>{{ room.note|room_note }}</span>
+      </div>
+      <div class="result-row room-measure-row">
+        <strong>面積</strong>
+        <span><input name="room_{{ room.pk }}_east_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.east_surface_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_west_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.west_surface_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_south_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.south_surface_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_north_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.north_surface_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.ceiling_surface_area_m2 }}"></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="result-row room-opening-row">
+        <strong>開口部</strong>
+        <span><input name="room_{{ room.pk }}_east_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.east_opening_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_west_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.west_opening_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_south_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.south_opening_area_m2 }}"></span>
+        <span><input name="room_{{ room.pk }}_north_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.north_opening_area_m2 }}"></span>
+        <span></span>
+        <span></span>
+        <span></span>
       </div>
     {% empty %}
       <div class="empty-result">
