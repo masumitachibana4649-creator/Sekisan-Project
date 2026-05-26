@@ -27,25 +27,21 @@
   font-weight: normal;
 }
 
-body.model-wallpaper.change-list #result_list {
-  table-layout: fixed;
-  width: 100%;
-}
-
 body.model-wallpaper.change-list #result_list .column-display_order,
 body.model-wallpaper.change-list #result_list .field-display_order {
-  width: 5em !important;
-  max-width: 5em;
+  width: 5em;
+  white-space: nowrap;
 }
 
 body.model-wallpaper.change-list #result_list .field-display_order input {
+  box-sizing: border-box;
+  min-width: 0;
   width: 4em;
 }
 
 body.model-wallpaper.change-list #result_list .column-name,
 body.model-wallpaper.change-list #result_list .field-name {
-  width: 32em !important;
-  max-width: 32em;
+  min-width: 24em;
 }
 
 body.model-user.change-list #result_list .column-email,
@@ -54,48 +50,51 @@ body.model-user.change-list #result_list .column-last_name,
 body.model-user.change-list #result_list .field-email,
 body.model-user.change-list #result_list .field-first_name,
 body.model-user.change-list #result_list .field-last_name {
-  width: 18em !important;
-  max-width: 18em;
+  width: 14em;
 }
 
-body.model-user.change-list #result_list {
-  table-layout: fixed;
-  width: 100%;
+body.model-user.change-list #changelist .changelist-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-body.model-user.change-list #content-main #changelist {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr);
+body.model-user.change-list #changelist .changelist-form-container > div {
+  display: contents;
 }
 
 body.model-user.change-list #toolbar {
-  grid-row: 1;
-  grid-column: 1;
+  order: 1;
 }
 
 body.model-user.change-list #changelist-filter {
-  position: static !important;
-  grid-row: 2;
-  grid-column: 1;
-  width: 100% !important;
-  max-width: none;
+  order: 2;
+  position: static;
   box-sizing: border-box;
-  margin: 0 0 14px !important;
+  width: 100%;
+  margin: 0 0 14px;
   padding: 12px 14px;
   border: 1px solid var(--hairline-color);
   border-radius: 4px;
   background: var(--body-bg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 18px;
 }
 
 body.model-user.change-list #changelist-form {
-  grid-row: 3;
-  grid-column: 1;
-  margin-right: 0 !important;
+  order: 3;
+  margin-right: 0;
 }
 
 body.model-user.change-list #changelist-filter h2 {
-  display: inline-block;
-  margin: 0 18px 10px 0;
+  margin: 0;
+  min-width: 7em;
+}
+
+body.model-user.change-list #changelist-filter-extra-actions {
+  min-width: 8em;
 }
 
 body.model-user.change-list #changelist-filter h3 {
@@ -104,11 +103,8 @@ body.model-user.change-list #changelist-filter h3 {
 }
 
 body.model-user.change-list #changelist-filter details {
-  display: inline-block;
-  vertical-align: top;
-  width: 23%;
-  min-width: 210px;
-  margin: 0 1.5% 10px 0;
+  flex: 1 1 220px;
+  margin: 0;
 }
 
 body.model-user.change-list #changelist-filter ul {
