@@ -6,20 +6,15 @@
 <section class="workbench">
   <div class="workbench-main">
     <div class="page-kicker">PDF図面 / 部屋入力 / 自動積算</div>
-    <h1>壁紙の必要面積とロール本数を、その場で積算</h1>
-    <div class="metric-strip">
-      <div>
-        <span class="metric-label">案件数</span>
-        <strong>{{ projects|length }}</strong>
-      </div>
-      <div>
-        <span class="metric-label">最新ロール</span>
-        <strong>{% if latest %}{{ latest.total_rolls }}本{% else %}0本{% endif %}</strong>
-      </div>
-      <div>
-        <span class="metric-label">CSV出力</span>
-        <strong>対応</strong>
-      </div>
+    <h1 class="dashboard-title">壁紙の必要面積とロール本数を、<br>その場で積算</h1>
+    <div class="dashboard-flow" aria-label="積算の流れ">
+      <span>①PDF図面の読み込み</span>
+      <span>②縮尺の自動認識</span>
+      <span>③壁の自動検出</span>
+      <span>④窓・ドアの自動検出</span>
+      <span>⑤壁面積の自動計算</span>
+      <span>⑥壁紙ロール数の算出・集計</span>
+      <span>⑦見積のCSV出力</span>
     </div>
     <a class="primary-action" href="{% url 'project_create' %}">積算を開始</a>
   </div>

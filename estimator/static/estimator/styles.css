@@ -113,6 +113,23 @@ h1 {
   margin-bottom: 24px;
 }
 
+.dashboard-title {
+  max-width: 760px;
+  font-size: clamp(26px, 2.2vw, 28px);
+  line-height: 1.12;
+  margin-bottom: 22px;
+}
+
+.dashboard-flow {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 28px;
+  color: #26352f;
+  font-size: clamp(15px, 1.5vw, 18px);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 h2 {
   font-size: 22px;
   margin-bottom: 0;
