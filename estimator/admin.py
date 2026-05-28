@@ -116,6 +116,9 @@ class ProjectAdmin(admin.ModelAdmin):
     search_fields = ("name", "client_name")
     inlines = [RoomInline]
 
+    class Media:
+        css = {"all": ("estimator/admin.css",)}
+
     @admin.display(description="ロール本数")
     def total_rolls_display(self, obj):
         return obj.total_rolls
@@ -187,7 +190,7 @@ class GroupAdmin(DjangoGroupAdmin):
 
 class UserAdmin(DjangoUserAdmin):
     list_display = ("username", "email", "first_name", "last_name", "is_staff", "is_superuser", "is_active")
-    list_filter = ("is_staff", "is_superuser", "is_active", "groups")
+    list_filter = ("is_superuser", "is_staff", "groups", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")
 
     class Media:
