@@ -44,6 +44,30 @@ body.model-wallpaper.change-list #result_list .field-name {
   min-width: 24em;
 }
 
+body.model-wallpaper.change-list #result_list .column-display_order,
+body.model-wallpaper.change-list #result_list .column-roll_width_display,
+body.model-wallpaper.change-list #result_list .column-roll_length_display,
+body.model-wallpaper.change-list #result_list .column-loss_rate_display,
+body.model-wallpaper.change-list #result_list .column-unit_price_display,
+body.model-wallpaper.change-list #result_list .field-display_order,
+body.model-wallpaper.change-list #result_list .field-roll_width_display,
+body.model-wallpaper.change-list #result_list .field-roll_length_display,
+body.model-wallpaper.change-list #result_list .field-loss_rate_display,
+body.model-wallpaper.change-list #result_list .field-unit_price_display,
+body.model-project.change-list #result_list .column-total_rolls_display,
+body.model-project.change-list #result_list .column-total_cost_display,
+body.model-project.change-list #result_list .field-total_rolls_display,
+body.model-project.change-list #result_list .field-total_cost_display {
+  text-align: right;
+}
+
+body.model-wallpaper.change-list #result_list .column-roll_width_display,
+body.model-wallpaper.change-list #result_list .column-roll_width_display a,
+body.model-wallpaper.change-list #result_list .column-roll_length_display,
+body.model-wallpaper.change-list #result_list .column-roll_length_display a {
+  text-transform: none;
+}
+
 body.model-user.change-list #result_list .column-email,
 body.model-user.change-list #result_list .column-first_name,
 body.model-user.change-list #result_list .column-last_name,

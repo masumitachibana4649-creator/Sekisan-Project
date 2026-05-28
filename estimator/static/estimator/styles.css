@@ -495,7 +495,11 @@ textarea { resize: vertical; }
   color: var(--muted);
   font-size: 12px;
   font-weight: 900;
-  padding: 0 0 8px;
+  padding: 0 12px 8px;
+}
+
+.wallpaper-summary-head span:nth-child(n+2) {
+  text-align: right;
 }
 
 .wallpaper-summary-row {

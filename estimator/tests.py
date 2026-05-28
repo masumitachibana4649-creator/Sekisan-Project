@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from .admin import ProjectAdmin
+from .admin import ProjectAdmin, WallpaperAdmin
 from .models import ROOM_TOTAL_METHOD, Project, Room, Wallpaper
 from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
 from .templatetags.estimate_extras import room_note, sentence_breaks
@@ -91,11 +91,33 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "入力した内容です。<br><br>PDF読取説明です。<br>", html=False)
         self.assertNotContains(response, "<strong>メモ</strong>", html=False)
 
+    def test_project_detail_room_detail_labels_include_units(self):
+        project = Project.objects.create(name="単位表示テスト")
+        Room.objects.create(
+            project=project,
+            name="LDK",
+            perimeter_m=Decimal("18"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("20"),
+        )
+
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+
+        self.assertContains(response, "面積（m2）")
+        self.assertContains(response, "開口部（m2）")
+
     def test_project_admin_total_columns_have_japanese_labels(self):
         project_admin = ProjectAdmin(Project, AdminSite())
 
         self.assertEqual(project_admin.total_rolls_display.short_description, "ロール本数")
         self.assertEqual(project_admin.total_cost_display.short_description, "概算金額")
+
+    def test_wallpaper_admin_numeric_columns_have_lowercase_meter_labels(self):
+        wallpaper_admin = WallpaperAdmin(Wallpaper, AdminSite())
+
+        self.assertEqual(wallpaper_admin.roll_width_display.short_description, "ロール幅(m)")
+        self.assertEqual(wallpaper_admin.roll_length_display.short_description, "ロール長さ(m)")
 
     def test_sample_pdf_analysis_rooms_match_expected_totals(self):
         project = Project.objects.create(

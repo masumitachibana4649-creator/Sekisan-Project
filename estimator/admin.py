@@ -52,10 +52,10 @@ class WallpaperAdmin(admin.ModelAdmin):
         "display_order",
         "number",
         "name",
-        "roll_width_m",
-        "roll_length_m",
-        "loss_rate_percent",
-        "unit_price_per_roll",
+        "roll_width_display",
+        "roll_length_display",
+        "loss_rate_display",
+        "unit_price_display",
         "is_active",
     )
     list_display_links = ("number",)
@@ -92,6 +92,22 @@ class WallpaperAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    @admin.display(description="ロール幅(m)", ordering="roll_width_m")
+    def roll_width_display(self, obj):
+        return obj.roll_width_m
+
+    @admin.display(description="ロール長さ(m)", ordering="roll_length_m")
+    def roll_length_display(self, obj):
+        return obj.roll_length_m
+
+    @admin.display(description="ロス率(%)", ordering="loss_rate_percent")
+    def loss_rate_display(self, obj):
+        return obj.loss_rate_percent
+
+    @admin.display(description="1ロール単価", ordering="unit_price_per_roll")
+    def unit_price_display(self, obj):
+        return obj.unit_price_per_roll
 
 
 @admin.register(Project)
