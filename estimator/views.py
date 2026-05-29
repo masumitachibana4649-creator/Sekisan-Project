@@ -1,11 +1,16 @@
 import csv
 import logging
+import tempfile
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import close_old_connections
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import (
@@ -19,6 +24,7 @@ from .models import (
     Wallpaper,
 )
 from .pdf_analysis import analyze_wallpaper_pdf
+from . import storage
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +44,18 @@ def project_create(request):
     wallpapers = _selectable_wallpapers()
     default_wallpaper = defaults.default_wallpaper or Wallpaper.objects.get(number="001")
     if request.method == "POST":
-        if not request.FILES.get("drawing_pdf"):
+        uploaded_pdf = request.FILES.get("drawing_pdf")
+        if not uploaded_pdf:
             messages.error(request, "図面PDFを選択してください。")
+            return redirect("project_create")
+        try:
+            _validate_drawing_pdf(uploaded_pdf)
+            pdf_fields = _save_uploaded_drawing_pdf(uploaded_pdf, request.user)
+        except ValidationError as exc:
+            messages.error(request, exc.message)
+            return redirect("project_create")
+        except storage.SupabaseStorageError as exc:
+            messages.error(request, f"図面PDFを保存できませんでした。理由: {exc}")
             return redirect("project_create")
 
         surface_wallpapers = _posted_surface_wallpapers(request.POST, default_wallpaper)
@@ -47,11 +63,11 @@ def project_create(request):
         project = Project.objects.create(
             name=request.POST.get("name") or "無題の積算",
             client_name=request.POST.get("client_name", ""),
-            drawing_pdf=request.FILES.get("drawing_pdf"),
             wallpaper_roll_width_m=first_wallpaper.roll_width_m,
             wallpaper_roll_length_m=first_wallpaper.roll_length_m,
             loss_rate_percent=first_wallpaper.loss_rate_percent,
             unit_price_per_roll=first_wallpaper.unit_price_per_roll,
+            uploaded_by=request.user if request.user.is_authenticated else None,
             page_1f_plan=_page_value(request.POST.get("page_1f_plan"), "ー"),
             page_2f_plan=_page_value(request.POST.get("page_2f_plan"), "ー"),
             page_3f_plan=_page_value(request.POST.get("page_3f_plan"), "ー"),
@@ -61,6 +77,7 @@ def project_create(request):
             page_north_elevation=_page_value(request.POST.get("page_north_elevation"), "ー"),
             page_section=_page_value(request.POST.get("page_section"), "ー"),
             memo=request.POST.get("memo", ""),
+            **pdf_fields,
         )
 
         if _read_pdf_into_project(request, project, surface_wallpapers=surface_wallpapers):
@@ -173,15 +190,23 @@ def project_recalculate(request, pk):
 
 def project_pdf(request, pk):
     project = get_object_or_404(Project, pk=pk)
-    if not project.drawing_pdf:
+    if not project.has_drawing_pdf:
         raise Http404("PDFが登録されていません。")
+    if not project.can_view_drawing_pdf(request.user):
+        return HttpResponseForbidden("このPDFを表示する権限がありません。")
+
+    if project.drawing_pdf_storage_path:
+        try:
+            return HttpResponseRedirect(storage.create_signed_url(project.drawing_pdf_storage_path))
+        except storage.SupabaseStorageError as exc:
+            raise Http404("PDFの署名付きURLを発行できませんでした。") from exc
 
     try:
         pdf_file = project.drawing_pdf.open("rb")
     except (FileNotFoundError, OSError, ValueError) as exc:
         raise Http404("PDFファイルが見つかりません。") from exc
 
-    filename = Path(project.drawing_pdf.name).name
+    filename = project.drawing_pdf_filename
     response = FileResponse(pdf_file, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
@@ -291,14 +316,69 @@ def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None,
         created.save()
 
 
+def _validate_drawing_pdf(uploaded_file):
+    if uploaded_file.size > settings.PDF_MAX_UPLOAD_SIZE:
+        raise ValidationError("図面PDFは10MB以下にしてください。")
+    if uploaded_file.content_type != "application/pdf":
+        raise ValidationError("図面PDFはapplication/pdfのみアップロードできます。")
+
+    current_position = uploaded_file.tell()
+    uploaded_file.seek(0)
+    header = uploaded_file.read(5)
+    uploaded_file.seek(current_position)
+    if header != b"%PDF-":
+        raise ValidationError("PDFファイルとして認識できません。")
+
+
+def _save_uploaded_drawing_pdf(uploaded_file, user):
+    if not storage.is_configured():
+        return {
+            "drawing_pdf": uploaded_file,
+            "drawing_pdf_original_name": storage.safe_filename(uploaded_file.name),
+            "drawing_pdf_content_type": uploaded_file.content_type,
+            "drawing_pdf_size": uploaded_file.size,
+        }
+
+    object_path = _drawing_pdf_object_path(user)
+    storage.upload_pdf(uploaded_file, object_path)
+    return {
+        "drawing_pdf_storage_path": object_path,
+        "drawing_pdf_original_name": storage.safe_filename(uploaded_file.name),
+        "drawing_pdf_content_type": uploaded_file.content_type,
+        "drawing_pdf_size": uploaded_file.size,
+    }
+
+
+def _drawing_pdf_object_path(user):
+    user_id = user.pk if user.is_authenticated else "anonymous"
+    return f"{user_id}/{uuid.uuid4()}.pdf"
+
+
+@contextmanager
+def _drawing_pdf_path(project):
+    if project.drawing_pdf_storage_path:
+        pdf_data = storage.download_pdf(project.drawing_pdf_storage_path)
+        temp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        try:
+            temp_file.write(pdf_data)
+            temp_file.close()
+            yield temp_file.name
+        finally:
+            Path(temp_file.name).unlink(missing_ok=True)
+        return
+
+    yield project.drawing_pdf.path
+
+
 def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpaper=None, surface_wallpapers=None):
-    if not project.drawing_pdf:
+    if not project.has_drawing_pdf:
         messages.error(request, "PDF自動読取はできませんでした。理由: 図面PDFが登録されていません。")
         return False
 
     try:
         close_old_connections()
-        analysis = analyze_wallpaper_pdf(project.drawing_pdf.path, _project_page_map(project))
+        with _drawing_pdf_path(project) as pdf_path:
+            analysis = analyze_wallpaper_pdf(pdf_path, _project_page_map(project))
         if replace_rooms:
             project.rooms.all().delete()
         _create_rooms_from_analysis(
@@ -402,6 +482,11 @@ def _clone_project(project, name):
         name=name,
         client_name=project.client_name,
         drawing_pdf=project.drawing_pdf,
+        drawing_pdf_storage_path=project.drawing_pdf_storage_path,
+        drawing_pdf_original_name=project.drawing_pdf_original_name,
+        drawing_pdf_content_type=project.drawing_pdf_content_type,
+        drawing_pdf_size=project.drawing_pdf_size,
+        uploaded_by=project.uploaded_by,
         wallpaper_roll_width_m=project.wallpaper_roll_width_m,
         wallpaper_roll_length_m=project.wallpaper_roll_length_m,
         loss_rate_percent=project.loss_rate_percent,

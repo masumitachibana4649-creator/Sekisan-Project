@@ -3,9 +3,10 @@ import json
 from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
+from django.contrib.auth.models import User
 from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .admin import ProjectAdmin, WallpaperAdmin
@@ -35,6 +36,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(room.total_area.quantize(Decimal("0.01")), Decimal("31.30"))
         self.assertEqual(room.rolls_required, 1)
 
+    @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_view_reads_pdf_and_redirects(self):
         analysis = PdfAnalysisResult(
             rooms=[
@@ -76,6 +78,75 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertIn("inline", response["Content-Disposition"])
+
+    @override_settings(
+        SUPABASE_URL="https://example.supabase.co",
+        SUPABASE_SECRET_KEY="sb_secret_test",
+        SUPABASE_BUCKET="pdfs",
+    )
+    def test_project_create_uploads_pdf_to_supabase_storage(self):
+        analysis = PdfAnalysisResult(
+            rooms=[],
+            memo="PDF AI読取",
+        )
+        with patch("estimator.views.uuid.uuid4", return_value="550e8400-e29b-41d4-a716-446655440000"), patch(
+            "estimator.views.storage.upload_pdf"
+        ) as upload_pdf, patch("estimator.views.analyze_wallpaper_pdf", return_value=analysis), patch(
+            "estimator.views.storage.download_pdf", return_value=b"%PDF-1.4\n%%EOF"
+        ), patch(
+            "estimator.storage.delete_pdf"
+        ):
+            response = self.client.post(
+                reverse("project_create"),
+                {
+                    "name": "Supabase保存案件",
+                    "client_name": "橘工務店",
+                    "drawing_pdf": SimpleUploadedFile("drawing.pdf", b"%PDF-1.4\n%%EOF", content_type="application/pdf"),
+                },
+            )
+
+        project = Project.objects.get(name="Supabase保存案件")
+        self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
+        self.assertEqual(project.drawing_pdf_storage_path, "anonymous/550e8400-e29b-41d4-a716-446655440000.pdf")
+        self.assertFalse(project.drawing_pdf)
+        upload_pdf.assert_called_once()
+
+    @override_settings(
+        SUPABASE_URL="https://example.supabase.co",
+        SUPABASE_SECRET_KEY="sb_secret_test",
+        SUPABASE_BUCKET="pdfs",
+    )
+    def test_project_pdf_view_redirects_to_signed_url_for_owner(self):
+        owner = User.objects.create_user(username="owner", password="password")
+        project = Project.objects.create(
+            name="署名URL案件",
+            drawing_pdf_storage_path="1/drawing.pdf",
+            drawing_pdf_original_name="drawing.pdf",
+            uploaded_by=owner,
+        )
+        self.client.force_login(owner)
+
+        with patch("estimator.views.storage.create_signed_url", return_value="https://example.supabase.co/signed"), patch(
+            "estimator.storage.delete_pdf"
+        ):
+            response = self.client.get(reverse("project_pdf", args=[project.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "https://example.supabase.co/signed")
+
+    def test_project_pdf_view_rejects_non_owner_for_storage_pdf(self):
+        owner = User.objects.create_user(username="owner", password="password")
+        other = User.objects.create_user(username="other", password="password")
+        project = Project.objects.create(
+            name="権限確認案件",
+            drawing_pdf_storage_path="1/drawing.pdf",
+            uploaded_by=owner,
+        )
+        self.client.force_login(other)
+
+        response = self.client.get(reverse("project_pdf", args=[project.pk]))
+
+        self.assertEqual(response.status_code, 403)
 
     def test_result_text_filters_insert_sentence_breaks_and_format_confidence(self):
         self.assertEqual(str(sentence_breaks("一文目です。二文目です。")), "一文目です。<br>二文目です。<br>")
@@ -356,6 +427,7 @@ class WallpaperEstimateTests(TestCase):
             with self.assertRaisesMessage(ValueError, "部屋抽出数が不足"):
                 analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
 
+    @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_does_not_fall_back_when_pdf_analysis_has_unexpected_error(self):
         with patch("estimator.views.analyze_wallpaper_pdf", side_effect=RuntimeError("boom")):
             response = self.client.post(

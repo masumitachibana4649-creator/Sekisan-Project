@@ -11,7 +11,7 @@
   </div>
   <div class="result-actions">
     <a class="secondary-action" href="{% url 'project_create' %}">新規積算</a>
-    {% if project.drawing_pdf %}
+    {% if project.has_drawing_pdf %}
       <form method="post" action="{% url 'project_recalculate' project.pk %}" data-estimate-form>
         {% csrf_token %}
         <button class="secondary-action" type="submit">再計算</button>
@@ -69,7 +69,7 @@
   <section class="content-band">
   <div class="section-heading">
     <h2>部屋別明細</h2>
-    {% if project.drawing_pdf %}
+    {% if project.has_drawing_pdf %}
       <a href="{% url 'project_pdf' project.pk %}" target="_blank" rel="noopener">PDFを開く</a>
     {% endif %}
   </div>
@@ -79,7 +79,7 @@
   {% if has_estimated_openings %}
     <p class="estimate-note">青文字は立面図・平面図の縮尺と既知寸法からの推定値なので注意</p>
   {% endif %}
-  {% if project.drawing_pdf %}
+  {% if project.has_drawing_pdf %}
     <div class="page-map-summary">
       <span>1F平面図: {{ project.page_1f_plan }}</span>
       <span>2F平面図: {{ project.page_2f_plan }}</span>
@@ -153,7 +153,7 @@
     {% empty %}
       <div class="empty-result">
         <strong>積算が作成できませんでした。</strong>
-        {% if project.drawing_pdf %}
+        {% if project.has_drawing_pdf %}
           <span>再計算を押すと、PDF読取から計算をやり直します。</span>
         {% endif %}
       </div>

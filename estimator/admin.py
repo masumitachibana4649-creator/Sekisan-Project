@@ -112,8 +112,15 @@ class WallpaperAdmin(admin.ModelAdmin):
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("name", "client_name", "total_rolls_display", "total_cost_display", "updated_at")
+    list_display = ("name", "client_name", "uploaded_by", "total_rolls_display", "total_cost_display", "updated_at")
     search_fields = ("name", "client_name")
+    readonly_fields = (
+        "drawing_pdf_storage_path",
+        "drawing_pdf_original_name",
+        "drawing_pdf_content_type",
+        "drawing_pdf_size",
+        "uploaded_by",
+    )
     inlines = [RoomInline]
 
     class Media:

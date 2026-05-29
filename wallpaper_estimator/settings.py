@@ -15,9 +15,11 @@ import sys
 from pathlib import Path
 
 import dj_database_url
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -164,6 +166,15 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_PDF_ANALYSIS_MODEL = os.environ.get("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SECRET_KEY = os.environ.get(
+    "SUPABASE_SECRET_KEY",
+    os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
+)
+SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "pdfs")
+SUPABASE_SIGNED_URL_EXPIRES_IN = int(os.environ.get("SIGNED_URL_EXPIRES_IN", "600"))
+SUPABASE_STORAGE_TIMEOUT_SECONDS = int(os.environ.get("SUPABASE_STORAGE_TIMEOUT_SECONDS", "30"))
+PDF_MAX_UPLOAD_SIZE = int(os.environ.get("PDF_MAX_UPLOAD_SIZE", str(10 * 1024 * 1024)))
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 if RENDER_EXTERNAL_HOSTNAME:

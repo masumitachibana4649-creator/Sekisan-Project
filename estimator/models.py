@@ -1,6 +1,10 @@
 from django.core.exceptions import ValidationError
+from django.conf import settings
 from django.db import models
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
 from decimal import Decimal, ROUND_CEILING
+import logging
 
 
 WALLPAPER_TOTAL_METHOD = "wallpaper_total"
@@ -18,6 +22,8 @@ SURFACE_FIELDS = (
     ("north", "北壁面", "wall"),
     ("ceiling", "天井", "ceiling"),
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Wallpaper(models.Model):
@@ -107,6 +113,18 @@ class Project(models.Model):
     name = models.CharField("案件名", max_length=120)
     client_name = models.CharField("顧客名", max_length=120, blank=True)
     drawing_pdf = models.FileField("図面PDF", upload_to="drawings/", blank=True)
+    drawing_pdf_storage_path = models.CharField("図面PDF Storageパス", max_length=512, blank=True)
+    drawing_pdf_original_name = models.CharField("図面PDF 元ファイル名", max_length=255, blank=True)
+    drawing_pdf_content_type = models.CharField("図面PDF MIMEタイプ", max_length=100, blank=True)
+    drawing_pdf_size = models.PositiveIntegerField("図面PDF サイズ", null=True, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="アップロードユーザー",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="uploaded_projects",
+    )
     wallpaper_roll_width_m = models.DecimalField("ロール幅(m)", max_digits=5, decimal_places=2, default=Decimal("0.92"))
     wallpaper_roll_length_m = models.DecimalField("ロール長さ(m)", max_digits=5, decimal_places=2, default=Decimal("50"))
     loss_rate_percent = models.DecimalField("ロス率(%)", max_digits=5, decimal_places=1, default=Decimal("8"))
@@ -136,6 +154,25 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def has_drawing_pdf(self):
+        return bool(self.drawing_pdf_storage_path or self.drawing_pdf)
+
+    @property
+    def drawing_pdf_filename(self):
+        if self.drawing_pdf_original_name:
+            return self.drawing_pdf_original_name
+        if self.drawing_pdf:
+            return self.drawing_pdf.name.rsplit("/", 1)[-1]
+        return "drawing.pdf"
+
+    def can_view_drawing_pdf(self, user):
+        if not self.has_drawing_pdf:
+            return False
+        if not self.uploaded_by_id:
+            return True
+        return bool(user.is_authenticated and (user.is_staff or user.pk == self.uploaded_by_id))
 
     @property
     def roll_area(self):
@@ -473,3 +510,41 @@ def _empty_wallpaper_total(item):
         "wall_area": Decimal("0"),
         "ceiling_area": Decimal("0"),
     }
+
+
+@receiver(pre_save, sender=Project)
+def delete_replaced_project_pdf(sender, instance, **kwargs):
+    if not instance.pk:
+        return
+    old_path = (
+        sender.objects.filter(pk=instance.pk)
+        .values_list("drawing_pdf_storage_path", flat=True)
+        .first()
+    )
+    new_path = instance.drawing_pdf_storage_path
+    if old_path and old_path != new_path:
+        _delete_unreferenced_storage_pdf(old_path, excluding_pk=instance.pk)
+
+
+@receiver(post_delete, sender=Project)
+def delete_project_pdf(sender, instance, **kwargs):
+    if instance.drawing_pdf_storage_path:
+        _delete_unreferenced_storage_pdf(instance.drawing_pdf_storage_path)
+
+
+def _delete_unreferenced_storage_pdf(object_path, excluding_pk=None):
+    query = Project.objects.filter(drawing_pdf_storage_path=object_path)
+    if excluding_pk:
+        query = query.exclude(pk=excluding_pk)
+    if query.exists():
+        return
+
+    from . import storage
+
+    if not storage.is_configured():
+        return
+
+    try:
+        storage.delete_pdf(object_path)
+    except storage.SupabaseStorageError:
+        logger.exception("Could not delete Supabase PDF object: %s", object_path)
