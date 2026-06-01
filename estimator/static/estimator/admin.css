@@ -29,14 +29,20 @@
 
 body.model-wallpaper.change-list #result_list .column-display_order,
 body.model-wallpaper.change-list #result_list .field-display_order {
-  width: 5em;
+  width: 3.8em;
   white-space: nowrap;
 }
 
 body.model-wallpaper.change-list #result_list .field-display_order input {
   box-sizing: border-box;
   min-width: 0;
-  width: 4em;
+  width: 3.3em;
+}
+
+body.model-wallpaper.change-list #result_list .column-number,
+body.model-wallpaper.change-list #result_list .field-number {
+  width: 4.2em;
+  white-space: nowrap;
 }
 
 body.model-wallpaper.change-list #result_list .column-name,
