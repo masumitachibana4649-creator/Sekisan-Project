@@ -43,8 +43,20 @@ a { color: inherit; text-decoration: none; }
   gap: 12px;
 }
 
-.result-actions form {
+.result-actions form,
+.logout-form,
+.heading-actions form {
   margin: 0;
+}
+
+.logout-form {
+  display: contents;
+}
+
+.user-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .brand {
@@ -241,6 +253,13 @@ h2 {
   font-weight: 800;
 }
 
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .project-list {
   display: grid;
   gap: 10px;
@@ -302,6 +321,24 @@ h2 {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+.field-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.inline-action {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.is-hidden {
+  display: none;
 }
 
 .page-map-grid,
@@ -370,6 +407,16 @@ textarea { resize: vertical; }
   overflow-x: auto;
 }
 
+.result-table {
+  max-height: 620px;
+}
+
+.result-body {
+  min-width: 1580px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
 .room-head,
 .room-line {
   display: grid;
@@ -395,6 +442,14 @@ textarea { resize: vertical; }
   font-size: 12px;
   font-weight: 900;
   padding: 0 0 8px;
+}
+
+.result-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  min-width: 1580px;
 }
 
 .room-line,
@@ -615,6 +670,45 @@ textarea { resize: vertical; }
   border-color: #f1b8b2;
 }
 
+.auth-panel {
+  width: min(520px, 100%);
+  margin: 24px auto 0;
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.auth-panel h1 {
+  font-size: 34px;
+  margin-bottom: 0;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-form .primary-action {
+  width: 100%;
+}
+
+.form-errors,
+.errorlist {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f1b8b2;
+  border-radius: 8px;
+  color: #b42318;
+  background: #fff1f0;
+}
+
+.errorlist {
+  list-style: none;
+  font-size: 12px;
+}
+
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -685,12 +779,15 @@ textarea { resize: vertical; }
   }
 
   .top-actions,
-  .result-actions {
+  .result-actions,
+  .heading-actions {
     width: 100%;
   }
 
   .icon-link,
   .result-actions a,
+  .heading-actions a,
+  .heading-actions button,
   .section-heading button {
     flex: 1;
   }

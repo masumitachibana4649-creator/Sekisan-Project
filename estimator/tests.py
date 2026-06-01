@@ -16,6 +16,9 @@ from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
 class WallpaperEstimateTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="user", password="password")
+
     def test_rolls_are_rounded_up_per_room(self):
         project = Project.objects.create(
             name="テスト案件",
@@ -38,6 +41,7 @@ class WallpaperEstimateTests(TestCase):
 
     @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_view_reads_pdf_and_redirects(self):
+        self.client.force_login(self.user)
         analysis = PdfAnalysisResult(
             rooms=[
                 AnalyzedRoom("LDK", Decimal("18"), Decimal("2.4"), Decimal("4.2"), Decimal("20"), "推定開口: 立面図から推定")
@@ -60,12 +64,79 @@ class WallpaperEstimateTests(TestCase):
 
         project = Project.objects.get(name="橘邸")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
+        self.assertEqual(project.uploaded_by, self.user)
         self.assertEqual(project.rooms.count(), 1)
         self.assertEqual(project.total_rolls, 2)
 
+    def test_project_create_requires_login(self):
+        response = self.client.get(reverse("project_create"))
+
+        self.assertRedirects(response, f"{reverse('login')}?next={reverse('project_create')}")
+
+    def test_dashboard_hides_history_and_start_button_before_login(self):
+        Project.objects.create(name="非表示案件", uploaded_by=self.user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertNotContains(response, "非表示案件")
+        self.assertNotContains(response, "積算を開始")
+        self.assertContains(response, "ログインすると積算履歴を確認できます")
+
+    def test_dashboard_shows_only_current_user_projects(self):
+        other_user = User.objects.create_user(username="other-user", password="password")
+        Project.objects.create(name="自分の案件", uploaded_by=self.user)
+        Project.objects.create(name="他人の案件", uploaded_by=other_user)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "自分の案件")
+        self.assertContains(response, self.user.username)
+        self.assertNotContains(response, "他人の案件")
+
+    def test_signup_creates_general_user_and_logs_in(self):
+        response = self.client.post(
+            reverse("signup"),
+            {
+                "username": "new-user",
+                "password1": "strong-password-123",
+                "password2": "strong-password-123",
+            },
+        )
+
+        user = User.objects.get(username="new-user")
+        self.assertRedirects(response, reverse("dashboard"))
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
+
+    def test_staff_login_redirects_to_admin(self):
+        staff = User.objects.create_user(username="staff", password="password", is_staff=True)
+
+        response = self.client.post(reverse("login"), {"username": staff.username, "password": "password"})
+
+        self.assertRedirects(response, "/admin/", fetch_redirect_response=False)
+
+    def test_project_views_reject_other_users(self):
+        owner = User.objects.create_user(username="owner-user", password="password")
+        project = Project.objects.create(name="他人の積算", uploaded_by=owner, drawing_pdf="drawings/dummy.pdf")
+        self.client.force_login(self.user)
+
+        checks = [
+            self.client.get(reverse("project_detail", args=[project.pk])),
+            self.client.post(reverse("project_save_wallpapers", args=[project.pk])),
+            self.client.post(reverse("project_recalculate", args=[project.pk])),
+            self.client.get(reverse("project_pdf", args=[project.pk])),
+            self.client.get(reverse("project_csv", args=[project.pk])),
+        ]
+
+        self.assertTrue(all(response.status_code == 403 for response in checks))
+
     def test_project_pdf_view_serves_uploaded_pdf(self):
+        self.client.force_login(self.user)
         project = Project.objects.create(
             name="PDF表示テスト",
+            uploaded_by=self.user,
             drawing_pdf=SimpleUploadedFile(
                 "drawing.pdf",
                 b"%PDF-1.4\n% test pdf\n",
@@ -85,6 +156,7 @@ class WallpaperEstimateTests(TestCase):
         SUPABASE_BUCKET="pdfs",
     )
     def test_project_create_uploads_pdf_to_supabase_storage(self):
+        self.client.force_login(self.user)
         analysis = PdfAnalysisResult(
             rooms=[],
             memo="PDF AI読取",
@@ -107,7 +179,7 @@ class WallpaperEstimateTests(TestCase):
 
         project = Project.objects.get(name="Supabase保存案件")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
-        self.assertEqual(project.drawing_pdf_storage_path, "anonymous/550e8400-e29b-41d4-a716-446655440000.pdf")
+        self.assertEqual(project.drawing_pdf_storage_path, f"{self.user.pk}/550e8400-e29b-41d4-a716-446655440000.pdf")
         self.assertFalse(project.drawing_pdf)
         upload_pdf.assert_called_once()
 
@@ -155,7 +227,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(str(room_note("根拠: 図面。AI信頼度: 0.82")), "根拠: 図面。<br>AI信頼度: 82%")
 
     def test_project_detail_shows_entered_memo_without_fixed_title(self):
-        project = Project.objects.create(name="メモ表示テスト", memo="入力した内容です。\nPDF読取説明です。")
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="メモ表示テスト", memo="入力した内容です。\nPDF読取説明です。", uploaded_by=self.user)
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
 
@@ -163,7 +236,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotContains(response, "<strong>メモ</strong>", html=False)
 
     def test_project_detail_room_detail_labels_include_units(self):
-        project = Project.objects.create(name="単位表示テスト")
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="単位表示テスト", uploaded_by=self.user)
         Room.objects.create(
             project=project,
             name="LDK",
@@ -268,8 +342,9 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.total_rolls, 4)
 
     def test_project_save_wallpapers_creates_revision_with_selected_method(self):
+        self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
-        project = Project.objects.create(name="保存元")
+        project = Project.objects.create(name="保存元", uploaded_by=self.user)
         room = Room.objects.create(
             project=project,
             name="LDK",
@@ -429,6 +504,7 @@ class WallpaperEstimateTests(TestCase):
 
     @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_does_not_fall_back_when_pdf_analysis_has_unexpected_error(self):
+        self.client.force_login(self.user)
         with patch("estimator.views.analyze_wallpaper_pdf", side_effect=RuntimeError("boom")):
             response = self.client.post(
                 reverse("project_create"),
@@ -452,7 +528,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(str(response_messages[1]), "積算が作成できませんでした。")
 
     def test_project_recalculate_reads_pdf_again(self):
-        project = Project.objects.create(name="再計算案件", drawing_pdf="drawings/dummy.pdf")
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="再計算案件", drawing_pdf="drawings/dummy.pdf", uploaded_by=self.user)
         Room.objects.create(
             project=project,
             name="古い部屋",

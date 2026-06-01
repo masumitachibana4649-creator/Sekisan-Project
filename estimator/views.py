@@ -8,10 +8,15 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.views import LoginView
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from .models import (
     ESTIMATE_METHOD_CHOICES,
@@ -29,8 +34,39 @@ from . import storage
 logger = logging.getLogger(__name__)
 
 
+class StaffAwareLoginView(LoginView):
+    template_name = "registration/login.html"
+
+    def get_success_url(self):
+        if self.request.user.is_staff or self.request.user.is_superuser:
+            return "/admin/"
+        return self.get_redirect_url() or reverse("dashboard")
+
+
+def signup(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.is_staff = False
+            user.is_superuser = False
+            user.save()
+            login(request, user)
+            messages.success(request, "ユーザー登録が完了しました。")
+            return redirect("dashboard")
+    else:
+        form = UserCreationForm()
+
+    return render(request, "estimator/signup.html", {"form": form})
+
+
 def dashboard(request):
-    projects = Project.objects.prefetch_related("rooms")[:8]
+    projects = Project.objects.none()
+    if request.user.is_authenticated:
+        projects = Project.objects.filter(uploaded_by=request.user).prefetch_related("rooms")[:8]
     latest = projects[0] if projects else None
     context = {
         "projects": projects,
@@ -39,6 +75,7 @@ def dashboard(request):
     return render(request, "estimator/dashboard.html", context)
 
 
+@login_required
 def project_create(request):
     defaults = EstimateDefaultSettings.load()
     wallpapers = _selectable_wallpapers()
@@ -101,10 +138,11 @@ def project_create(request):
 
 
 def project_detail(request, pk):
-    project = get_object_or_404(Project.objects.prefetch_related("rooms"), pk=pk)
+    project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     rooms = project.rooms.all()
     has_estimated_openings = any(_is_estimated_opening(room) for room in rooms)
     summary = project.wallpaper_summary
+    edit_mode = request.GET.get("edit") == "1"
     return render(
         request,
         "estimator/project_detail.html",
@@ -117,12 +155,13 @@ def project_detail(request, pk):
             "summary": summary,
             "suggested_project_name": _suggested_revision_name(project.name),
             "has_estimated_openings": has_estimated_openings,
+            "edit_mode": edit_mode,
         },
     )
 
 
 def project_save_wallpapers(request, pk):
-    source_project = get_object_or_404(Project.objects.prefetch_related("rooms"), pk=pk)
+    source_project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     if request.method != "POST":
         return redirect("project_detail", pk=source_project.pk)
 
@@ -175,7 +214,7 @@ def project_save_wallpapers(request, pk):
 
 
 def project_recalculate(request, pk):
-    project = get_object_or_404(Project, pk=pk)
+    project = _owned_project_or_403(request, Project, pk)
     if request.method != "POST":
         return redirect("project_detail", pk=project.pk)
 
@@ -189,7 +228,7 @@ def project_recalculate(request, pk):
 
 
 def project_pdf(request, pk):
-    project = get_object_or_404(Project, pk=pk)
+    project = _owned_project_or_403(request, Project, pk)
     if not project.has_drawing_pdf:
         raise Http404("PDFが登録されていません。")
     if not project.can_view_drawing_pdf(request.user):
@@ -213,7 +252,7 @@ def project_pdf(request, pk):
 
 
 def project_csv(request, pk):
-    project = get_object_or_404(Project.objects.prefetch_related("rooms"), pk=pk)
+    project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     filename = f"wallpaper_estimate_{project.pk}.csv"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -295,6 +334,19 @@ def project_csv(request, pk):
     writer.writerow(["採用見積方式", project.get_adopted_estimate_method_display()])
     writer.writerow(["採用正式見積金額(円)", project.total_cost])
     return response
+
+
+def _owned_project_or_403(request, queryset, pk):
+    if not request.user.is_authenticated:
+        return _raise_forbidden()
+    project = get_object_or_404(queryset, pk=pk)
+    if project.uploaded_by_id != request.user.pk:
+        return _raise_forbidden()
+    return project
+
+
+def _raise_forbidden():
+    raise PermissionDenied("この積算データを表示する権限がありません。")
 
 
 def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None, surface_wallpapers=None):

@@ -164,6 +164,9 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard"
+LOGOUT_REDIRECT_URL = "dashboard"
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_PDF_ANALYSIS_MODEL = os.environ.get("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")

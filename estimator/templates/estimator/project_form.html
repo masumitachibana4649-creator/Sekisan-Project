@@ -16,7 +16,12 @@
     <div class="form-grid">
       <label>案件名<input name="name" required placeholder="例: 橘邸 改装工事"></label>
       <label>顧客名<input name="client_name" placeholder="例: 橘工務店"></label>
-      <label class="wide">図面PDF<input name="drawing_pdf" type="file" accept="application/pdf" required></label>
+      <label class="wide">図面PDF
+        <span class="field-action-row">
+          <input name="drawing_pdf" type="file" accept="application/pdf" required data-pdf-input>
+          <a class="inline-action is-hidden" href="#" target="_blank" rel="noopener" data-pdf-preview>PDFを開く</a>
+        </span>
+      </label>
       <label class="wide">メモ<textarea name="memo" rows="2" placeholder="品番、施工条件、注意事項"></textarea></label>
     </div>
   </section>

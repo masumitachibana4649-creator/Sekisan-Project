@@ -17,8 +17,19 @@
       <span>壁紙積算システム</span>
     </a>
     <nav class="top-actions">
-      <a class="icon-link" href="{% url 'project_create' %}" aria-label="新規積算">＋ 新規積算</a>
-      <a class="icon-link ghost" href="/admin/" aria-label="管理">管理</a>
+      {% if request.user.is_authenticated %}
+        <span class="user-label">{{ request.user.username }}</span>
+        <form class="logout-form" method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button class="icon-link ghost" type="submit">ログアウト</button>
+        </form>
+        {% if request.user.is_staff or request.user.is_superuser %}
+          <a class="icon-link ghost" href="/admin/" aria-label="管理">管理</a>
+        {% endif %}
+      {% else %}
+        <a class="icon-link" href="{% url 'login' %}" aria-label="ログイン">ログイン</a>
+        <a class="icon-link ghost" href="{% url 'signup' %}" aria-label="ユーザー登録">ユーザー登録</a>
+      {% endif %}
     </nav>
   </header>
 

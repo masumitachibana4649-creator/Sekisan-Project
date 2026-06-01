@@ -11,12 +11,6 @@
   </div>
   <div class="result-actions">
     <a class="secondary-action" href="{% url 'project_create' %}">新規積算</a>
-    {% if project.has_drawing_pdf %}
-      <form method="post" action="{% url 'project_recalculate' project.pk %}" data-estimate-form>
-        {% csrf_token %}
-        <button class="secondary-action" type="submit">再計算</button>
-      </form>
-    {% endif %}
     {% if rooms %}
       <a class="primary-action" href="{% url 'project_csv' project.pk %}">CSV出力</a>
     {% endif %}
@@ -69,9 +63,20 @@
   <section class="content-band">
   <div class="section-heading">
     <h2>部屋別明細</h2>
-    {% if project.has_drawing_pdf %}
-      <a href="{% url 'project_pdf' project.pk %}" target="_blank" rel="noopener">PDFを開く</a>
-    {% endif %}
+    <div class="heading-actions">
+      <a class="secondary-action" href="{% url 'project_detail' project.pk %}{% if not edit_mode %}?edit=1{% endif %}">
+        {% if edit_mode %}表示に戻る{% else %}編集{% endif %}
+      </a>
+      {% if edit_mode and project.has_drawing_pdf %}
+        <form method="post" action="{% url 'project_recalculate' project.pk %}" data-estimate-form>
+          {% csrf_token %}
+          <button class="secondary-action" type="submit">再計算</button>
+        </form>
+      {% endif %}
+      {% if project.has_drawing_pdf %}
+        <a href="{% url 'project_pdf' project.pk %}" target="_blank" rel="noopener">PDFを開く</a>
+      {% endif %}
+    </div>
   </div>
   {% if project.memo %}
     <p class="memo-box">{{ project.memo|sentence_breaks }}</p>
@@ -95,58 +100,79 @@
     <div class="result-head">
       <span>部屋名</span><span>東壁面</span><span>西壁面</span><span>南壁面</span><span>北壁面</span><span>天井</span><span>面積/本数</span><span>備考</span>
     </div>
+    <div class="result-body">
     {% for room in rooms %}
       <div class="room-detail-group">
-        <strong class="room-name-cell">{{ room.name }}</strong>
+        <strong class="room-name-cell">{{ forloop.counter }}. {{ room.name }}</strong>
         <span class="room-wallpaper-cell">
-          <select class="room-wallpaper-select" name="room_{{ room.pk }}_east_wallpaper_no">
-            {% for wallpaper in wallpapers %}
-              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.east_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
-            {% endfor %}
-          </select>
+          {% if edit_mode %}
+            <select class="room-wallpaper-select" name="room_{{ room.pk }}_east_wallpaper_no">
+              {% for wallpaper in wallpapers %}
+                <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.east_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            {{ room.east_wallpaper_no }}：{{ room.east_wallpaper_name }}
+          {% endif %}
         </span>
         <span class="room-wallpaper-cell">
-          <select class="room-wallpaper-select" name="room_{{ room.pk }}_west_wallpaper_no">
-            {% for wallpaper in wallpapers %}
-              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.west_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
-            {% endfor %}
-          </select>
+          {% if edit_mode %}
+            <select class="room-wallpaper-select" name="room_{{ room.pk }}_west_wallpaper_no">
+              {% for wallpaper in wallpapers %}
+                <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.west_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            {{ room.west_wallpaper_no }}：{{ room.west_wallpaper_name }}
+          {% endif %}
         </span>
         <span class="room-wallpaper-cell">
-          <select class="room-wallpaper-select" name="room_{{ room.pk }}_south_wallpaper_no">
-            {% for wallpaper in wallpapers %}
-              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.south_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
-            {% endfor %}
-          </select>
+          {% if edit_mode %}
+            <select class="room-wallpaper-select" name="room_{{ room.pk }}_south_wallpaper_no">
+              {% for wallpaper in wallpapers %}
+                <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.south_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            {{ room.south_wallpaper_no }}：{{ room.south_wallpaper_name }}
+          {% endif %}
         </span>
         <span class="room-wallpaper-cell">
-          <select class="room-wallpaper-select" name="room_{{ room.pk }}_north_wallpaper_no">
-            {% for wallpaper in wallpapers %}
-              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.north_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
-            {% endfor %}
-          </select>
+          {% if edit_mode %}
+            <select class="room-wallpaper-select" name="room_{{ room.pk }}_north_wallpaper_no">
+              {% for wallpaper in wallpapers %}
+                <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.north_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            {{ room.north_wallpaper_no }}：{{ room.north_wallpaper_name }}
+          {% endif %}
         </span>
         <span class="room-wallpaper-cell">
-          <select class="room-wallpaper-select" name="room_{{ room.pk }}_ceiling_wallpaper_no">
-            {% for wallpaper in wallpapers %}
-              <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.ceiling_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
-            {% endfor %}
-          </select>
+          {% if edit_mode %}
+            <select class="room-wallpaper-select" name="room_{{ room.pk }}_ceiling_wallpaper_no">
+              {% for wallpaper in wallpapers %}
+                <option value="{{ wallpaper.number }}" {% if wallpaper.number == room.ceiling_wallpaper_no %}selected{% endif %}>{{ wallpaper.number }}：{{ wallpaper.name }}</option>
+              {% endfor %}
+            </select>
+          {% else %}
+            {{ room.ceiling_wallpaper_no }}：{{ room.ceiling_wallpaper_name }}
+          {% endif %}
         </span>
         <span class="room-total-cell">{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
         <span class="room-note-cell">{{ room.note|room_note }}</span>
         <strong class="room-sub-label">面積（m2）</strong>
-        <span><input name="room_{{ room.pk }}_east_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.east_surface_area_m2 }}"></span>
-        <span><input name="room_{{ room.pk }}_west_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.west_surface_area_m2 }}"></span>
-        <span><input name="room_{{ room.pk }}_south_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.south_surface_area_m2 }}"></span>
-        <span><input name="room_{{ room.pk }}_north_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.north_surface_area_m2 }}"></span>
-        <span><input name="room_{{ room.pk }}_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.ceiling_surface_area_m2 }}"></span>
+        <span>{% if edit_mode %}<input name="room_{{ room.pk }}_east_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.east_surface_area_m2 }}">{% else %}{{ room.east_surface_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input name="room_{{ room.pk }}_west_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.west_surface_area_m2 }}">{% else %}{{ room.west_surface_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input name="room_{{ room.pk }}_south_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.south_surface_area_m2 }}">{% else %}{{ room.south_surface_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input name="room_{{ room.pk }}_north_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.north_surface_area_m2 }}">{% else %}{{ room.north_surface_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input name="room_{{ room.pk }}_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.ceiling_surface_area_m2 }}">{% else %}{{ room.ceiling_surface_area_m2 }}{% endif %}</span>
         <span></span>
         <strong class="room-sub-label">開口部（m2）</strong>
-        <span><input {% if room.east_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_east_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.east_opening_area_m2 }}"></span>
-        <span><input {% if room.west_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_west_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.west_opening_area_m2 }}"></span>
-        <span><input {% if room.south_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_south_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.south_opening_area_m2 }}"></span>
-        <span><input {% if room.north_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_north_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.north_opening_area_m2 }}"></span>
+        <span>{% if edit_mode %}<input {% if room.east_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_east_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.east_opening_area_m2 }}">{% else %}{{ room.east_opening_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input {% if room.west_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_west_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.west_opening_area_m2 }}">{% else %}{{ room.west_opening_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input {% if room.south_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_south_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.south_opening_area_m2 }}">{% else %}{{ room.south_opening_area_m2 }}{% endif %}</span>
+        <span>{% if edit_mode %}<input {% if room.north_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_north_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.north_opening_area_m2 }}">{% else %}{{ room.north_opening_area_m2 }}{% endif %}</span>
         <span></span>
         <span></span>
       </div>
@@ -158,9 +184,11 @@
         {% endif %}
       </div>
     {% endfor %}
+    </div>
   </div>
   </section>
 
+  {% if edit_mode %}
   <section class="content-band save-band">
     <div class="section-heading">
       <h2>見積方式と保存</h2>
@@ -183,6 +211,7 @@
       </label>
     </div>
   </section>
+  {% endif %}
 </form>
 
 <aside class="ad-slot wide-ad">

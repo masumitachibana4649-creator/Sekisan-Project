@@ -1,0 +1,31 @@
+{% extends "estimator/base.html" %}
+{% block title %}ログイン | 壁紙積算システム{% endblock %}
+
+{% block content %}
+<section class="auth-panel">
+  <div class="section-heading">
+    <div>
+      <div class="page-kicker">アカウント</div>
+      <h1>ログイン</h1>
+    </div>
+  </div>
+  <form method="post" class="auth-form">
+    {% csrf_token %}
+    {% if next %}
+      <input type="hidden" name="next" value="{{ next }}">
+    {% endif %}
+    {% if form.non_field_errors %}
+      <div class="form-errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <label>ユーザー名
+      {{ form.username }}
+      {{ form.username.errors }}
+    </label>
+    <label>パスワード
+      {{ form.password }}
+      {{ form.password.errors }}
+    </label>
+    <button class="primary-action" type="submit">ログイン</button>
+  </form>
+</section>
+{% endblock %}

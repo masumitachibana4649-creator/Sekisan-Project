@@ -16,7 +16,9 @@
       <span>⑥壁紙ロール数の算出・集計</span>
       <span>⑦見積のCSV出力</span>
     </div>
-    <a class="primary-action" href="{% url 'project_create' %}">積算を開始</a>
+    {% if request.user.is_authenticated %}
+      <a class="primary-action" href="{% url 'project_create' %}">積算を開始</a>
+    {% endif %}
   </div>
   <aside class="drawing-panel" aria-label="図面プレビュー">
     <img class="dashboard-plan" src="{% static 'estimator/dashboard-plan.png' %}" alt="平面図プレビュー">
@@ -27,14 +29,17 @@
   <div>
     <div class="section-heading">
       <h2>最近の積算</h2>
-      <a href="{% url 'project_create' %}">新規作成</a>
+      {% if request.user.is_authenticated %}
+        <a href="{% url 'project_create' %}">新規作成</a>
+      {% endif %}
     </div>
+    {% if request.user.is_authenticated %}
     <div class="project-list">
       {% for project in projects %}
         <a class="project-row" href="{% url 'project_detail' project.pk %}">
           <span>
             <strong>{{ project.name }}</strong>
-            <small>{{ project.client_name|default:"顧客名未設定" }} / {{ project.updated_at|date:"Y/m/d H:i" }}</small>
+            <small>{{ project.client_name|default:"顧客名未設定" }} / {{ project.uploaded_by.username }} / {{ project.updated_at|date:"Y/m/d H:i" }}</small>
           </span>
           <span class="row-total">{{ project.total_rolls }}本</span>
         </a>
@@ -45,6 +50,12 @@
         </div>
       {% endfor %}
     </div>
+    {% else %}
+      <div class="empty-state">
+        <strong>ログインすると積算履歴を確認できます</strong>
+        <span>ユーザー登録後に新規積算を作成できます。</span>
+      </div>
+    {% endif %}
   </div>
 
   <aside class="ad-slot">

@@ -171,8 +171,8 @@ class Project(models.Model):
         if not self.has_drawing_pdf:
             return False
         if not self.uploaded_by_id:
-            return True
-        return bool(user.is_authenticated and (user.is_staff or user.pk == self.uploaded_by_id))
+            return bool(user.is_authenticated)
+        return bool(user.is_authenticated and user.pk == self.uploaded_by_id)
 
     @property
     def roll_area(self):
