@@ -41,7 +41,10 @@ body.model-wallpaper.change-list #result_list .field-display_order input {
 
 body.model-wallpaper.change-list #result_list .column-name,
 body.model-wallpaper.change-list #result_list .field-name {
-  min-width: 24em;
+  min-width: 12em;
+  width: 12em;
+  max-width: 12em;
+  overflow-wrap: anywhere;
 }
 
 body.model-wallpaper.change-list #result_list .column-display_order,

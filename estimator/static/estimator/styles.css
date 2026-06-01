@@ -414,6 +414,7 @@ textarea { resize: vertical; }
 .result-body {
   min-width: 1580px;
   max-height: 560px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -466,6 +467,12 @@ textarea { resize: vertical; }
 .room-wallpaper-cell select {
   font-size: 14px;
   font-weight: 700;
+  text-align: left;
+}
+
+.room-wallpaper-cell {
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .room-sub-label {
