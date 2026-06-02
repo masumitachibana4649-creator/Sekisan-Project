@@ -74,6 +74,7 @@
         <a class="secondary-action" href="{% url 'project_detail' project.pk %}?edit=1">編集</a>
       {% endif %}
       {% if edit_mode and rooms %}
+        <button class="primary-action" type="submit" name="apply_changes" value="1">編集内容を反映</button>
         <a class="secondary-action" href="{% url 'project_detail' project.pk %}">表示に戻る</a>
       {% endif %}
       {% if project.has_drawing_pdf and edit_mode or project.has_drawing_pdf and not rooms %}

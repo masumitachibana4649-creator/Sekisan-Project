@@ -248,7 +248,8 @@ def _analysis_prompt(parsed_pages):
 - wall_surfaces は face_1, face_2, face_3, face_4 の4面を必ず返してください。
 - 展開図が「1面」「2面」「3面」「4面」の表記なら、そのまま face_1〜face_4 に対応させてください。
 - 展開図が「A」「B」「C」「D」の表記なら、A=face_1、B=face_2、C=face_3、D=face_4 と読み替えてください。
-- wall_surfaces の surface_area_m2 は開口部を差し引く前の壁面積、opening_area_m2 はその面の開口部面積にしてください。
+- wall_surfaces の width_m は展開図に書かれたその面の壁幅、surface_area_m2 は壁幅×天井高で計算した開口部を差し引く前の壁面積、opening_area_m2 はその面の開口部面積にしてください。
+- 例: 展開図に「1,592.5」、天井高が2.4mの場合、width_m=1.5925、surface_area_m2=3.82 としてください。surface_area_m2 に天井高 2.4 をそのまま入れないでください。
 - 展開図の面番号と部屋名の対応が不確かな場合は、根拠を evidence に書いて confidence を下げてください。
 - どうしても方向別の割り当てが不確かな場合は、合計値を均等配分せず、読めた壁面に配分して confidence を下げてください。
 - 外部開口は展開図の窓・玄関ドア・サッシを、展開図の縮尺と既知寸法から幅・高さを推定して部屋へ割り当ててください。
@@ -266,10 +267,11 @@ def _analysis_schema():
     surface_schema = {
         "type": "object",
         "properties": {
+            "width_m": {"type": "number", "minimum": 0},
             "surface_area_m2": {"type": "number", "minimum": 0},
             "opening_area_m2": {"type": "number", "minimum": 0},
         },
-        "required": ["surface_area_m2", "opening_area_m2"],
+        "required": ["width_m", "surface_area_m2", "opening_area_m2"],
         "additionalProperties": False,
     }
     wall_surfaces_schema = {
@@ -379,6 +381,7 @@ def _wall_surfaces_from_ai(value):
         if not isinstance(surface, dict):
             return None
         surfaces[field] = {
+            "width_m": _decimal_from_ai(surface.get("width_m"), "0"),
             "surface_area_m2": _decimal_from_ai(surface.get("surface_area_m2"), "0"),
             "opening_area_m2": _decimal_from_ai(surface.get("opening_area_m2"), "0"),
         }

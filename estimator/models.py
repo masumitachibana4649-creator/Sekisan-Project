@@ -365,20 +365,56 @@ class Room(models.Model):
     @property
     def display_name(self):
         name = str(self.name or "").strip()
-        if re.match(r"^[1-9]\s*(?:F|階)", name, re.IGNORECASE):
+        if self._is_multi_floor_room(name):
             return name
 
         floor = self._inferred_floor_label()
         if floor:
-            return f"{floor} {name}".strip()
+            name_without_floor = self._remove_floor_labels(name)
+            return f"{floor} {name_without_floor}".strip()
         return name
 
     def _inferred_floor_label(self):
-        source = f"{self.name} {self.note}"
+        source = self._ascii_digits(f"{self.name} {self.note}")
         match = re.search(r"([1-9])\s*(?:F|階)", source, re.IGNORECASE)
         if match:
             return f"{match.group(1)}F"
+        return self._floor_label_from_evidence_page(source)
+
+    def _floor_label_from_evidence_page(self, source):
+        page_matches = {
+            "1F": self.project.page_1f_plan,
+            "2F": self.project.page_2f_plan,
+            "3F": self.project.page_3f_plan,
+        }
+        for floor_label, page_value in page_matches.items():
+            page = self._page_number(page_value)
+            if page and re.search(rf"(?<!\d){page}\s*(?:P|ページ)", source, re.IGNORECASE):
+                return floor_label
         return ""
+
+    def _is_multi_floor_room(self, name):
+        return any(keyword in name for keyword in ("吹抜", "吹き抜け"))
+
+    def _remove_floor_labels(self, value):
+        normalized = self._ascii_digits(value)
+        normalized = re.sub(r"\b[1-9]\s*F\b", "", normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r"[1-9]\s*階", "", normalized)
+        return re.sub(r"\s+", " ", normalized).strip()
+
+    @staticmethod
+    def _ascii_digits(value):
+        return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+
+    @classmethod
+    def _page_number(cls, value):
+        normalized = cls._ascii_digits(value).strip()
+        if normalized in {"", "-", "ー", "－", "なし", "無し", "0"}:
+            return None
+        try:
+            return int(normalized)
+        except ValueError:
+            return None
 
     @property
     def wall_area(self):

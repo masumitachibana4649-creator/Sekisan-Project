@@ -526,9 +526,9 @@ textarea { resize: vertical; }
 .room-head,
 .result-head {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
-  padding: 0 0 8px;
+  padding: 10px 12px 8px;
 }
 
 .result-head {
@@ -537,6 +537,10 @@ textarea { resize: vertical; }
   z-index: 1;
   background: var(--panel);
   min-width: 1580px;
+}
+
+.result-head span:nth-child(n+2):not(:last-child) {
+  text-align: right;
 }
 
 .room-line,

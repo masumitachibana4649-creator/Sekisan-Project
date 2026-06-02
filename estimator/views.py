@@ -165,25 +165,32 @@ def project_save_wallpapers(request, pk):
     if request.method != "POST":
         return redirect("project_detail", pk=source_project.pk)
 
-    requested_name = (request.POST.get("save_project_name") or _suggested_revision_name(source_project.name)).strip()
-    if not requested_name:
-        requested_name = _suggested_revision_name(source_project.name)
-
-    overwrite = requested_name == source_project.name
-    if overwrite and request.POST.get("confirm_overwrite") != "1":
-        messages.error(request, "元案件名と同じため、上書き確認が必要です。")
-        return redirect("project_detail", pk=source_project.pk)
-
-    if overwrite:
+    apply_changes = request.POST.get("apply_changes") == "1"
+    if apply_changes:
         target_project = source_project
         target_project.adopted_estimate_method = _estimate_method(request.POST.get("adopted_estimate_method"))
         target_project.save(update_fields=["adopted_estimate_method", "updated_at"])
         room_map = {room.pk: room for room in target_project.rooms.all()}
     else:
-        target_project = _clone_project(source_project, requested_name)
-        target_project.adopted_estimate_method = _estimate_method(request.POST.get("adopted_estimate_method"))
-        target_project.save(update_fields=["adopted_estimate_method", "updated_at"])
-        room_map = _clone_rooms(source_project, target_project)
+        requested_name = (request.POST.get("save_project_name") or _suggested_revision_name(source_project.name)).strip()
+        if not requested_name:
+            requested_name = _suggested_revision_name(source_project.name)
+
+        overwrite = requested_name == source_project.name
+        if overwrite and request.POST.get("confirm_overwrite") != "1":
+            messages.error(request, "元案件名と同じため、上書き確認が必要です。")
+            return redirect("project_detail", pk=source_project.pk)
+
+        if overwrite:
+            target_project = source_project
+            target_project.adopted_estimate_method = _estimate_method(request.POST.get("adopted_estimate_method"))
+            target_project.save(update_fields=["adopted_estimate_method", "updated_at"])
+            room_map = {room.pk: room for room in target_project.rooms.all()}
+        else:
+            target_project = _clone_project(source_project, requested_name)
+            target_project.adopted_estimate_method = _estimate_method(request.POST.get("adopted_estimate_method"))
+            target_project.save(update_fields=["adopted_estimate_method", "updated_at"])
+            room_map = _clone_rooms(source_project, target_project)
 
     wallpaper_map = {wallpaper.number: wallpaper for wallpaper in Wallpaper.objects.all()}
     for source_room_id, target_room in room_map.items():
@@ -208,6 +215,10 @@ def project_save_wallpapers(request, pk):
                 )
         target_room.sync_totals_from_surface_measurements()
         target_room.save()
+
+    if apply_changes:
+        messages.success(request, "編集内容を積算に反映しました。")
+        return redirect(f"{reverse('project_detail', args=[target_project.pk])}?edit=1")
 
     messages.success(request, f"{target_project.name} として壁紙設定を保存しました。")
     return redirect("project_detail", pk=target_project.pk)
@@ -370,7 +381,7 @@ def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None,
                     created.ceiling_surface_area_m2 = room.ceiling_area_m2
                     continue
                 surface = _wall_surface_value(room.wall_surfaces, field)
-                setattr(created, f"{field}_surface_area_m2", surface.get("surface_area_m2", Decimal("0")))
+                setattr(created, f"{field}_surface_area_m2", _wall_surface_area(surface, room.height_m))
                 setattr(created, f"{field}_opening_area_m2", surface.get("opening_area_m2", Decimal("0")))
             created.sync_totals_from_surface_measurements()
         else:
@@ -386,6 +397,13 @@ def _wall_surface_value(wall_surfaces, field):
         "north": "face_4",
     }
     return wall_surfaces.get(field) or wall_surfaces.get(face_keys.get(field), {}) or {}
+
+
+def _wall_surface_area(surface, height_m):
+    width = surface.get("width_m", Decimal("0"))
+    if width > 0:
+        return (width * height_m).quantize(Decimal("0.01"))
+    return surface.get("surface_area_m2", Decimal("0"))
 
 
 def _validate_drawing_pdf(uploaded_file):

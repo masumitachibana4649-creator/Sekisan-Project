@@ -54,10 +54,10 @@ class WallpaperEstimateTests(TestCase):
                     Decimal("20"),
                     "推定開口: 展開図から推定",
                     {
-                        "face_1": {"surface_area_m2": Decimal("10.00"), "opening_area_m2": Decimal("1.00")},
-                        "face_2": {"surface_area_m2": Decimal("11.00"), "opening_area_m2": Decimal("1.20")},
-                        "face_3": {"surface_area_m2": Decimal("12.00"), "opening_area_m2": Decimal("0.80")},
-                        "face_4": {"surface_area_m2": Decimal("10.20"), "opening_area_m2": Decimal("1.20")},
+                        "face_1": {"width_m": Decimal("4.17"), "surface_area_m2": Decimal("2.40"), "opening_area_m2": Decimal("1.00")},
+                        "face_2": {"width_m": Decimal("4.58"), "surface_area_m2": Decimal("2.40"), "opening_area_m2": Decimal("1.20")},
+                        "face_3": {"width_m": Decimal("5.00"), "surface_area_m2": Decimal("2.40"), "opening_area_m2": Decimal("0.80")},
+                        "face_4": {"width_m": Decimal("4.25"), "surface_area_m2": Decimal("2.40"), "opening_area_m2": Decimal("1.20")},
                     },
                 )
             ],
@@ -82,8 +82,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.uploaded_by, self.user)
         self.assertEqual(project.rooms.count(), 1)
         room = project.rooms.get()
-        self.assertEqual(room.east_surface_area_m2, Decimal("10.00"))
-        self.assertEqual(room.west_surface_area_m2, Decimal("11.00"))
+        self.assertEqual(room.east_surface_area_m2, Decimal("10.01"))
+        self.assertEqual(room.west_surface_area_m2, Decimal("10.99"))
         self.assertEqual(room.south_opening_area_m2, Decimal("0.80"))
         self.assertEqual(room.opening_area_m2, Decimal("4.20"))
         self.assertEqual(project.total_rolls, 2)
@@ -228,6 +228,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotContains(response, ">再計算</button>")
 
         response = self.client.get(f'{reverse("project_detail", args=[project.pk])}?edit=1')
+        self.assertContains(response, "編集内容を反映")
         self.assertContains(response, "表示に戻る")
         self.assertContains(response, ">再計算</button>")
         self.assertNotContains(response, 'href="' + reverse("project_detail", args=[project.pk]) + '?edit=1"')
@@ -250,6 +251,29 @@ class WallpaperEstimateTests(TestCase):
 
         response = self.client.get(reverse("project_csv", args=[project.pk]))
         self.assertContains(response, "1F トイレ")
+
+    def test_room_display_name_normalizes_floor_without_duplicates(self):
+        project = Project.objects.create(name="階重複案件", uploaded_by=self.user)
+        room = Room.objects.create(
+            project=project,
+            name="トイレ 1F",
+            perimeter_m=Decimal("6"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("2"),
+        )
+        atrium = Room.objects.create(
+            project=project,
+            name="吹抜",
+            perimeter_m=Decimal("8"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("4"),
+            note="根拠: 2F平面図",
+        )
+
+        self.assertEqual(room.display_name, "1F トイレ")
+        self.assertEqual(atrium.display_name, "吹抜")
 
     def test_estimated_openings_are_blue_in_display_mode(self):
         self.client.force_login(self.user)
@@ -506,6 +530,53 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(revision_room.ceiling_area_m2, Decimal("20.00"))
         self.assertEqual(project.rooms.get().east_wallpaper_no, "001")
 
+    def test_project_apply_changes_updates_same_project_and_returns_to_edit_mode(self):
+        self.client.force_login(self.user)
+        Wallpaper.ensure_defaults()
+        project = Project.objects.create(name="反映元", uploaded_by=self.user)
+        room = Room.objects.create(
+            project=project,
+            name="LDK",
+            perimeter_m=Decimal("18"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("20"),
+        )
+        original_rolls = project.total_rolls
+
+        response = self.client.post(
+            reverse("project_save_wallpapers", args=[project.pk]),
+            {
+                "apply_changes": "1",
+                "save_project_name": "別案件名は使わない",
+                "adopted_estimate_method": ROOM_TOTAL_METHOD,
+                f"room_{room.pk}_east_wallpaper_no": "001",
+                f"room_{room.pk}_west_wallpaper_no": "001",
+                f"room_{room.pk}_south_wallpaper_no": "001",
+                f"room_{room.pk}_north_wallpaper_no": "001",
+                f"room_{room.pk}_ceiling_wallpaper_no": "001",
+                f"room_{room.pk}_east_surface_area_m2": "80.00",
+                f"room_{room.pk}_west_surface_area_m2": "10.00",
+                f"room_{room.pk}_south_surface_area_m2": "9.00",
+                f"room_{room.pk}_north_surface_area_m2": "8.00",
+                f"room_{room.pk}_ceiling_surface_area_m2": "20.00",
+                f"room_{room.pk}_east_opening_area_m2": "1.00",
+                f"room_{room.pk}_west_opening_area_m2": "0.50",
+                f"room_{room.pk}_south_opening_area_m2": "0.25",
+                f"room_{room.pk}_north_opening_area_m2": "0.00",
+            },
+        )
+
+        project.refresh_from_db()
+        room.refresh_from_db()
+        self.assertRedirects(response, f"{reverse('project_detail', args=[project.pk])}?edit=1", fetch_redirect_response=False)
+        self.assertEqual(Project.objects.count(), 1)
+        self.assertEqual(project.adopted_estimate_method, ROOM_TOTAL_METHOD)
+        self.assertEqual(room.east_wallpaper_no, "001")
+        self.assertEqual(room.east_surface_area_m2, Decimal("80.00"))
+        self.assertEqual(room.opening_area_m2, Decimal("1.75"))
+        self.assertGreater(project.total_rolls, original_rolls)
+
     def test_sample_pdf_analysis_uses_only_existing_plan_pages(self):
         project = Project.objects.create(
             name="PDF解析テスト 1Fのみ",
@@ -545,10 +616,10 @@ class WallpaperEstimateTests(TestCase):
                     "opening_area_m2": 3.25,
                     "ceiling_area_m2": 22.64,
                     "wall_surfaces": {
-                        "face_1": {"surface_area_m2": 8.1, "opening_area_m2": 1.0},
-                        "face_2": {"surface_area_m2": 8.2, "opening_area_m2": 0.5},
-                        "face_3": {"surface_area_m2": 8.3, "opening_area_m2": 1.25},
-                        "face_4": {"surface_area_m2": 8.4, "opening_area_m2": 0.5},
+                        "face_1": {"width_m": 3.375, "surface_area_m2": 8.1, "opening_area_m2": 1.0},
+                        "face_2": {"width_m": 3.416, "surface_area_m2": 8.2, "opening_area_m2": 0.5},
+                        "face_3": {"width_m": 3.458, "surface_area_m2": 8.3, "opening_area_m2": 1.25},
+                        "face_4": {"width_m": 3.5, "surface_area_m2": 8.4, "opening_area_m2": 0.5},
                     },
                     "confidence": 0.82,
                     "evidence": "2F平面図: LDK 13.68帖、C.H 2400",
