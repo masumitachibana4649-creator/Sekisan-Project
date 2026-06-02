@@ -3,6 +3,8 @@ from decimal import Decimal
 import json
 import os
 import re
+import tempfile
+from pathlib import Path
 
 try:
     from django.conf import settings
@@ -123,8 +125,10 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages):
     model = _setting("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
     client = OpenAI(api_key=api_key)
     uploaded_file = None
+    selected_pdf_path = None
     try:
-        with open(pdf_path, "rb") as pdf_file:
+        selected_pdf_path = _write_selected_pages_pdf(pdf_path, parsed_pages)
+        with open(selected_pdf_path, "rb") as pdf_file:
             uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
 
         response = client.responses.create(
@@ -155,8 +159,38 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages):
                 client.files.delete(uploaded_file.id)
             except Exception:
                 pass
+        if selected_pdf_path is not None:
+            Path(selected_pdf_path).unlink(missing_ok=True)
 
     return _parse_ai_analysis_response(_response_text(response))
+
+
+def _write_selected_pages_pdf(pdf_path, parsed_pages):
+    try:
+        from pypdf import PdfReader, PdfWriter
+    except ImportError as exc:
+        raise ValueError("PDF図面の読取ライブラリがインストールされていません。") from exc
+
+    selected_pages = []
+    for page_number in parsed_pages.values():
+        if page_number is not None and page_number not in selected_pages:
+            selected_pages.append(page_number)
+    if not selected_pages:
+        raise ValueError("AI読取対象の図面ページが指定されていません。")
+
+    try:
+        reader = PdfReader(str(pdf_path))
+        writer = PdfWriter()
+        for page_number in selected_pages:
+            writer.add_page(reader.pages[page_number - 1])
+        temp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        try:
+            writer.write(temp_file)
+        finally:
+            temp_file.close()
+        return temp_file.name
+    except Exception as exc:
+        raise ValueError("AI読取用の指定ページPDFを作成できませんでした。") from exc
 
 
 def _analysis_prompt(parsed_pages):
@@ -352,7 +386,7 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms):
     missing_total = sum(missing.values())
     missing_summary = "、".join(f"{label}{count}件" for label, count in missing.items())
     if _missing_only_secondary_spaces(missing):
-        return [f"平面図上の収納・廊下候補に対し、未抽出の可能性があります: {missing_summary}。"]
+        return [f"平面図上の補助空間候補に対し、未抽出の可能性があります: {missing_summary}。"]
 
     if expected_total >= 5 and (actual_total < (expected_total * Decimal("0.60")) or missing_total >= 3):
         raise ValueError(
@@ -365,7 +399,7 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms):
 
 
 def _missing_only_secondary_spaces(missing):
-    return bool(missing) and set(missing).issubset({"収納", "廊下"})
+    return bool(missing) and set(missing).issubset({"収納", "廊下", "玄関"})
 
 
 def _plan_page_text(pdf_path, parsed_pages):

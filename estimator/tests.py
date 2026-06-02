@@ -1,5 +1,7 @@
 from decimal import Decimal
 import json
+from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
@@ -11,7 +13,7 @@ from django.urls import reverse
 
 from .admin import ProjectAdmin, WallpaperAdmin
 from .models import ROOM_TOTAL_METHOD, Project, Room, Wallpaper
-from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms
+from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms, _write_selected_pages_pdf
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
@@ -670,7 +672,7 @@ class WallpaperEstimateTests(TestCase):
             ],
             "warnings": [],
         }))
-        plan_text = "LDK 玄関 洋室1 洋室2 収納 収納 収納 廊下"
+        plan_text = "LDK 洋室1 洋室2 収納 収納 収納 玄関"
 
         with patch("estimator.pdf_analysis._pdf_page_count", return_value=12), patch(
             "estimator.pdf_analysis._extract_rooms_with_ai",
@@ -679,7 +681,36 @@ class WallpaperEstimateTests(TestCase):
             result = analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "9", "page_2f_plan": "10"})
 
         self.assertEqual(len(result.rooms), 4)
-        self.assertIn("収納・廊下候補", result.memo)
+        self.assertIn("補助空間候補", result.memo)
+
+    def test_selected_pages_pdf_contains_only_requested_unique_pages(self):
+        from pypdf import PdfReader, PdfWriter
+
+        source_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        source_file.close()
+        selected_path = None
+        try:
+            writer = PdfWriter()
+            for _index in range(5):
+                writer.add_blank_page(width=72, height=72)
+            with open(source_file.name, "wb") as pdf_file:
+                writer.write(pdf_file)
+
+            selected_path = _write_selected_pages_pdf(
+                source_file.name,
+                {
+                    "page_1f_plan": 2,
+                    "page_2f_plan": 4,
+                    "page_1f_ceiling_plan": 2,
+                    "page_3f_plan": None,
+                },
+            )
+
+            self.assertEqual(len(PdfReader(selected_path).pages), 2)
+        finally:
+            Path(source_file.name).unlink(missing_ok=True)
+            if selected_path:
+                Path(selected_path).unlink(missing_ok=True)
 
     @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_does_not_fall_back_when_pdf_analysis_has_unexpected_error(self):
