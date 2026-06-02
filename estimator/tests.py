@@ -13,7 +13,16 @@ from django.urls import reverse
 
 from .admin import ProjectAdmin, WallpaperAdmin
 from .models import ROOM_TOTAL_METHOD, Project, Room, Wallpaper
-from .pdf_analysis import AnalyzedRoom, PdfAnalysisResult, analyze_wallpaper_pdf, _parse_ai_analysis_response, _sample_plan_rooms, _write_selected_pages_pdf
+from .pdf_analysis import (
+    AnalyzedRoom,
+    PdfAnalysisResult,
+    analyze_wallpaper_pdf,
+    _analysis_prompt,
+    _expected_room_counts,
+    _parse_ai_analysis_response,
+    _sample_plan_rooms,
+    _write_selected_pages_pdf,
+)
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
@@ -643,6 +652,35 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("AI信頼度: 0.82", room.note)
         self.assertEqual(result["warnings"], ["開口部は一部推定"])
 
+    def test_expected_room_counts_includes_legacy_house_labels_without_double_counting(self):
+        plan_text = "和室 和室 台所 食堂 洗面所 脱衣 便所 押入 物入 納戸 子供室 主寝室 ホール"
+
+        counts = _expected_room_counts(plan_text)
+
+        self.assertEqual(counts["和室"], 2)
+        self.assertEqual(counts["台所"], 1)
+        self.assertEqual(counts["食堂"], 1)
+        self.assertEqual(counts["洗面所"], 2)
+        self.assertEqual(counts["トイレ"], 1)
+        self.assertEqual(counts["収納"], 3)
+        self.assertEqual(counts["洋室"], 2)
+        self.assertEqual(counts["廊下"], 1)
+
+    def test_analysis_prompt_keeps_rooms_when_development_drawings_are_incomplete(self):
+        prompt = _analysis_prompt(
+            {
+                "page_1f_plan": 5,
+                "page_2f_plan": 5,
+                "page_development_start": 16,
+                "page_development_end": 22,
+            },
+            expected_counts={"和室": 2, "収納": 3, "台所": 1},
+        )
+
+        self.assertIn("展開図が読み取りやすい和室A/Bなど一部の部屋だけで回答を終えず", prompt)
+        self.assertIn("展開図未確認のため平面図から推定", prompt)
+        self.assertIn("和室: 約2件", prompt)
+
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
         extracted_room = _parse_ai_analysis_response(json.dumps({
             "rooms": [
@@ -669,7 +707,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(result.rooms[0].name, "洋室")
         self.assertIn("壁紙量とロール本数はシステムの計算式で算出", result.memo)
 
-    def test_analyze_wallpaper_pdf_rejects_obviously_incomplete_room_extraction(self):
+    def test_analyze_wallpaper_pdf_warns_on_obviously_incomplete_room_extraction(self):
         extracted_rooms = _parse_ai_analysis_response(json.dumps({
             "rooms": [
                 {
@@ -699,8 +737,11 @@ class WallpaperEstimateTests(TestCase):
             "estimator.pdf_analysis._extract_rooms_with_ai",
             return_value=extracted_rooms,
         ), patch("estimator.pdf_analysis._plan_page_text", return_value=plan_text):
-            with self.assertRaisesMessage(ValueError, "部屋抽出数が不足"):
-                analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
+            result = analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
+
+        self.assertEqual(len(result.rooms), 2)
+        self.assertIn("部屋抽出数が不足", result.memo)
+        self.assertIn("未抽出候補", result.memo)
 
     def test_analyze_wallpaper_pdf_warns_instead_of_failing_when_only_secondary_spaces_are_missing(self):
         extracted_rooms = _parse_ai_analysis_response(json.dumps({

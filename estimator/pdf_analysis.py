@@ -43,13 +43,16 @@ PAGE_LABELS = {
 PLAN_PAGE_KEYS = ("page_1f_plan", "page_2f_plan", "page_3f_plan")
 NON_WALLPAPER_ROOM_LABELS = ("浴室", "バルコニー")
 ROOM_LABEL_PATTERNS = {
-    "洋室": ("洋室",),
-    "収納": ("収納",),
-    "廊下": ("廊下",),
+    "和室": ("和室",),
+    "洋室": ("洋室", "子供室", "子供部屋", "主寝室", "寝室"),
+    "収納": ("収納", "物入", "押入", "納戸", "小屋裏収納", "CL", "ＣＬ", "SIC", "ＳＩＣ", "パントリー"),
+    "廊下": ("廊下", "ホール"),
     "玄関": ("玄関",),
-    "トイレ": ("トイレ",),
+    "トイレ": ("トイレ", "便所", "WC", "ＷＣ"),
     "LDK": ("LDK", "ＬＤＫ"),
-    "洗面所": ("洗面所",),
+    "台所": ("台所", "キッチン"),
+    "食堂": ("食堂", "ダイニング"),
+    "洗面所": ("洗面所", "洗面", "洗面脱衣", "脱衣", "ランドリー"),
 }
 
 
@@ -59,12 +62,15 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
     if not parsed_pages.get("page_1f_plan") and not parsed_pages.get("page_2f_plan") and not parsed_pages.get("page_3f_plan"):
         raise ValueError("平面図のページが指定されていません。")
 
-    ai_result = _extract_rooms_with_ai(pdf_path, parsed_pages)
+    plan_text = _plan_page_text(pdf_path, parsed_pages)
+    expected_counts = _expected_room_counts(plan_text) if plan_text else {}
+
+    ai_result = _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=expected_counts)
     rooms = ai_result["rooms"]
     if not rooms:
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
-    validation_warnings = _validate_room_extraction(pdf_path, parsed_pages, rooms)
+    validation_warnings = _validate_room_extraction(pdf_path, parsed_pages, rooms, plan_text=plan_text, expected_counts=expected_counts)
 
     page_summary = "、".join(
         f"{PAGE_LABELS[key]}={value}P" for key, value in parsed_pages.items() if value is not None
@@ -121,7 +127,7 @@ def _parse_page_map(page_map, page_count):
     return parsed
 
 
-def _extract_rooms_with_ai(pdf_path, parsed_pages):
+def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None):
     api_key = _setting("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY が設定されていないためPDF AI読取を実行できません。")
@@ -147,7 +153,7 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages):
                     "role": "user",
                     "content": [
                         {"type": "input_file", "file_id": uploaded_file.id},
-                        {"type": "input_text", "text": _analysis_prompt(parsed_pages)},
+                        {"type": "input_text", "text": _analysis_prompt(parsed_pages, expected_counts=expected_counts)},
                     ],
                 }
             ],
@@ -215,14 +221,18 @@ def _analysis_page_numbers(parsed_pages):
     return selected_pages
 
 
-def _analysis_prompt(parsed_pages):
+def _analysis_prompt(parsed_pages, expected_counts=None):
     page_lines = "\n".join(
         f"- {PAGE_LABELS[key]}: {value}ページ" for key, value in parsed_pages.items() if value is not None
     )
+    expected_room_lines = _expected_room_prompt_lines(expected_counts)
     return f"""
 添付PDFは壁紙積算用の建築図面です。以下の指定ページだけを主な根拠にして、クロス施工対象の部屋を抽出してください。
 
 {page_lines}
+
+平面図テキストから検出した室名候補:
+{expected_room_lines}
 
 抽出対象:
 - 部屋名
@@ -240,9 +250,14 @@ def _analysis_prompt(parsed_pages):
 - 天井高が部屋ごとに読めない場合は、図面内の標準天井高を使ってください。
 - 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
 - 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
+- 上記の室名候補は抽出漏れチェックに使います。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
+- 和室、台所、食堂、便所、物入、押入、納戸、子供室、寝室など旧来表記の部屋名も通常のクロス施工対象として扱ってください。
 - 同じ室名が複数ある場合は統合せず、位置や階で区別してください。例: 洋室が3つ見える場合は3行、収納が複数見える場合は「収納 一式」または個別行として漏れなく含めてください。
 - 廊下、階段、玄関、トイレ、洗面所、収納、物入もクロス施工対象として含めてください。
 - 収納・物入・SIC・CL・パントリー・廊下・ホール・階段は、個別寸法が読めない場合でも「一式」や展開図の複合部屋名として必ずroomsに含めてください。
+- 展開図に4面すべての情報がない部屋でも、平面図または天井伏図で確認できる部屋は省略しないでください。読めた寸法、畳数、天井面積、近い類似部屋から周長・壁幅・開口部を合理的に推定してroomsに含めてください。
+- 展開図が読み取りやすい和室A/Bなど一部の部屋だけで回答を終えず、指定された平面図ページ全体を対象にして、各階の居室・水回り・収納・廊下・玄関を最後に再確認してください。
+- 部屋ごとの展開図が見つからない場合は、wall_surfaces を空にせず、平面図の長方形寸法または周長から face_1〜face_4 の width_m と surface_area_m2 を推定してください。その場合は evidence に「展開図未確認のため平面図から推定」と明記し、confidence を下げてください。
 - 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
 - 開口部は外部開口と内部開口を分けて検討してください。
 - wall_surfaces は face_1, face_2, face_3, face_4 の4面を必ず返してください。
@@ -261,6 +276,12 @@ def _analysis_prompt(parsed_pages):
 - 不確かな値は evidence に根拠と推定理由を書き、confidence を下げてください。
 - ロール本数、ロス率込み面積、金額は計算しないでください。アプリ側で計算します。
 """.strip()
+
+
+def _expected_room_prompt_lines(expected_counts):
+    if not expected_counts:
+        return "- なし"
+    return "\n".join(f"- {label}: 約{count}件" for label, count in expected_counts.items())
 
 
 def _analysis_schema():
@@ -388,12 +409,12 @@ def _wall_surfaces_from_ai(value):
     return surfaces
 
 
-def _validate_room_extraction(pdf_path, parsed_pages, rooms):
-    plan_text = _plan_page_text(pdf_path, parsed_pages)
+def _validate_room_extraction(pdf_path, parsed_pages, rooms, plan_text=None, expected_counts=None):
+    plan_text = plan_text if plan_text is not None else _plan_page_text(pdf_path, parsed_pages)
     if not plan_text:
         return []
 
-    expected_counts = _expected_room_counts(plan_text)
+    expected_counts = expected_counts if expected_counts is not None else _expected_room_counts(plan_text)
     if not expected_counts:
         return []
 
@@ -419,11 +440,12 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms):
         return [f"平面図上の補助空間候補に対し、未抽出の可能性があります: {missing_summary}。"]
 
     if expected_total >= 5 and (actual_total < (expected_total * Decimal("0.60")) or missing_total >= 3):
-        raise ValueError(
+        return [
             "PDF AI読取の部屋抽出数が不足している可能性があります。"
             f"平面図上の室名候補は約{expected_total}件、抽出結果は{actual_total}件です。"
             f"未抽出候補: {missing_summary}。"
-        )
+            "積算結果を確認し、必要に応じて編集で部屋・面積を補正してください。"
+        ]
 
     return [f"平面図上の室名候補に対し、未抽出の可能性があります: {missing_summary}。"]
 
@@ -452,7 +474,7 @@ def _expected_room_counts(plan_text):
     text = _normalize_text(plan_text)
     counts = {}
     for label, aliases in ROOM_LABEL_PATTERNS.items():
-        count = sum(_count_label_occurrences(text, alias) for alias in {_normalize_text(alias) for alias in aliases})
+        count = _count_alias_occurrences(text, aliases)
         if count:
             counts[label] = count
     for excluded in NON_WALLPAPER_ROOM_LABELS:
@@ -464,11 +486,23 @@ def _actual_room_count(room_text, aliases, expected_count):
     text = _normalize_text(room_text)
     if "一式" in str(room_text) and any(alias in text for alias in {_normalize_text(alias) for alias in aliases}):
         return expected_count
-    return sum(1 for alias in {_normalize_text(alias) for alias in aliases} for match in re.finditer(re.escape(alias), text))
+    return _count_alias_occurrences(text, aliases)
 
 
-def _count_label_occurrences(text, label):
-    return len(re.findall(re.escape(_normalize_text(label)), text))
+def _count_alias_occurrences(text, aliases):
+    normalized_aliases = sorted(
+        {_normalize_text(alias) for alias in aliases if _normalize_text(alias)},
+        key=len,
+        reverse=True,
+    )
+    spans = []
+    for alias in normalized_aliases:
+        for match in re.finditer(re.escape(alias), text):
+            span = match.span()
+            if any(span[0] < existing[1] and existing[0] < span[1] for existing in spans):
+                continue
+            spans.append(span)
+    return len(spans)
 
 
 def _normalize_text(value):
