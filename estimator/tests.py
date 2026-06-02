@@ -628,6 +628,59 @@ class WallpaperEstimateTests(TestCase):
             with self.assertRaisesMessage(ValueError, "部屋抽出数が不足"):
                 analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
 
+    def test_analyze_wallpaper_pdf_warns_instead_of_failing_when_only_secondary_spaces_are_missing(self):
+        extracted_rooms = _parse_ai_analysis_response(json.dumps({
+            "rooms": [
+                {
+                    "name": "1階 LDK",
+                    "perimeter_m": 20,
+                    "height_m": 2.4,
+                    "opening_area_m2": 0,
+                    "ceiling_area_m2": 30,
+                    "confidence": 0.9,
+                    "evidence": "1F平面図",
+                },
+                {
+                    "name": "1階 玄関",
+                    "perimeter_m": 8,
+                    "height_m": 2.4,
+                    "opening_area_m2": 0,
+                    "ceiling_area_m2": 4,
+                    "confidence": 0.9,
+                    "evidence": "1F平面図",
+                },
+                {
+                    "name": "2階 洋室1",
+                    "perimeter_m": 12,
+                    "height_m": 2.4,
+                    "opening_area_m2": 0,
+                    "ceiling_area_m2": 9,
+                    "confidence": 0.9,
+                    "evidence": "2F平面図",
+                },
+                {
+                    "name": "2階 洋室2",
+                    "perimeter_m": 12,
+                    "height_m": 2.4,
+                    "opening_area_m2": 0,
+                    "ceiling_area_m2": 9,
+                    "confidence": 0.9,
+                    "evidence": "2F平面図",
+                },
+            ],
+            "warnings": [],
+        }))
+        plan_text = "LDK 玄関 洋室1 洋室2 収納 収納 収納 廊下"
+
+        with patch("estimator.pdf_analysis._pdf_page_count", return_value=12), patch(
+            "estimator.pdf_analysis._extract_rooms_with_ai",
+            return_value=extracted_rooms,
+        ), patch("estimator.pdf_analysis._plan_page_text", return_value=plan_text):
+            result = analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "9", "page_2f_plan": "10"})
+
+        self.assertEqual(len(result.rooms), 4)
+        self.assertIn("収納・廊下候補", result.memo)
+
     @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_does_not_fall_back_when_pdf_analysis_has_unexpected_error(self):
         self.client.force_login(self.user)

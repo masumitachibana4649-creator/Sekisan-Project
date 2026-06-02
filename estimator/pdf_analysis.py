@@ -186,6 +186,7 @@ def _analysis_prompt(parsed_pages):
 - 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
 - 同じ室名が複数ある場合は統合せず、位置や階で区別してください。例: 洋室が3つ見える場合は3行、収納が複数見える場合は「収納 一式」または個別行として漏れなく含めてください。
 - 廊下、階段、玄関、トイレ、洗面所、収納、物入もクロス施工対象として含めてください。
+- 収納・物入・SIC・CL・パントリー・廊下・ホール・階段は、個別寸法が読めない場合でも「一式」や展開図の複合部屋名として必ずroomsに含めてください。
 - 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
 - 開口部は外部開口と内部開口を分けて検討してください。
 - wall_surfaces は east, west, south, north の4方向を必ず返してください。
@@ -350,6 +351,9 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms):
     actual_total = len(rooms)
     missing_total = sum(missing.values())
     missing_summary = "、".join(f"{label}{count}件" for label, count in missing.items())
+    if _missing_only_secondary_spaces(missing):
+        return [f"平面図上の収納・廊下候補に対し、未抽出の可能性があります: {missing_summary}。"]
+
     if expected_total >= 5 and (actual_total < (expected_total * Decimal("0.60")) or missing_total >= 3):
         raise ValueError(
             "PDF AI読取の部屋抽出数が不足している可能性があります。"
@@ -358,6 +362,10 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms):
         )
 
     return [f"平面図上の室名候補に対し、未抽出の可能性があります: {missing_summary}。"]
+
+
+def _missing_only_secondary_spaces(missing):
+    return bool(missing) and set(missing).issubset({"収納", "廊下"})
 
 
 def _plan_page_text(pdf_path, parsed_pages):
