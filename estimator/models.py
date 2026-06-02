@@ -17,10 +17,10 @@ ESTIMATE_METHOD_CHOICES = (
 )
 
 SURFACE_FIELDS = (
-    ("east", "東壁面", "wall"),
-    ("west", "西壁面", "wall"),
-    ("south", "南壁面", "wall"),
-    ("north", "北壁面", "wall"),
+    ("east", "1面", "wall"),
+    ("west", "2面", "wall"),
+    ("south", "3面", "wall"),
+    ("north", "4面", "wall"),
     ("ceiling", "天井", "ceiling"),
 )
 
@@ -139,9 +139,8 @@ class Project(models.Model):
     page_1f_plan = models.CharField("1F平面図ページ", max_length=8, default="ー")
     page_2f_plan = models.CharField("2F平面図ページ", max_length=8, default="ー")
     page_3f_plan = models.CharField("3F平面図ページ", max_length=8, default="ー")
-    page_1f_development = models.CharField("1F展開図ページ", max_length=8, default="ー")
-    page_2f_development = models.CharField("2F展開図ページ", max_length=8, default="ー")
-    page_3f_development = models.CharField("3F展開図ページ", max_length=8, default="ー")
+    page_development_start = models.CharField("展開図開始ページ", max_length=8, default="ー")
+    page_development_end = models.CharField("展開図終了ページ", max_length=8, default="ー")
     page_1f_ceiling_plan = models.CharField("1F天井伏図ページ", max_length=8, default="ー")
     page_2f_ceiling_plan = models.CharField("2F天井伏図ページ", max_length=8, default="ー")
     page_3f_ceiling_plan = models.CharField("3F天井伏図ページ", max_length=8, default="ー")

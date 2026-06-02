@@ -33,9 +33,8 @@ PAGE_LABELS = {
     "page_1f_plan": "1F平面図",
     "page_2f_plan": "2F平面図",
     "page_3f_plan": "3F平面図",
-    "page_1f_development": "1F展開図",
-    "page_2f_development": "2F展開図",
-    "page_3f_development": "3F展開図",
+    "page_development_start": "展開図開始頁",
+    "page_development_end": "展開図終了頁",
     "page_1f_ceiling_plan": "1F天井伏図",
     "page_2f_ceiling_plan": "2F天井伏図",
     "page_3f_ceiling_plan": "3F天井伏図",
@@ -109,6 +108,16 @@ def _parse_page_map(page_map, page_count):
         if page_number < 1 or page_number > page_count:
             raise ValueError(f"{PAGE_LABELS[key]}のページ番号 {page_number} はPDFのページ範囲外です。")
         parsed[key] = page_number
+    if parsed.get("page_development_start") is None and parsed.get("page_development_end") is not None:
+        raise ValueError("展開図開始頁が指定されていません。")
+    if parsed.get("page_development_start") is not None and parsed.get("page_development_end") is None:
+        raise ValueError("展開図終了頁が指定されていません。")
+    if (
+        parsed.get("page_development_start") is not None
+        and parsed.get("page_development_end") is not None
+        and parsed["page_development_start"] > parsed["page_development_end"]
+    ):
+        raise ValueError("展開図開始頁は展開図終了頁以下にしてください。")
     return parsed
 
 
@@ -171,10 +180,7 @@ def _write_selected_pages_pdf(pdf_path, parsed_pages):
     except ImportError as exc:
         raise ValueError("PDF図面の読取ライブラリがインストールされていません。") from exc
 
-    selected_pages = []
-    for page_number in parsed_pages.values():
-        if page_number is not None and page_number not in selected_pages:
-            selected_pages.append(page_number)
+    selected_pages = _analysis_page_numbers(parsed_pages)
     if not selected_pages:
         raise ValueError("AI読取対象の図面ページが指定されていません。")
 
@@ -193,6 +199,22 @@ def _write_selected_pages_pdf(pdf_path, parsed_pages):
         raise ValueError("AI読取用の指定ページPDFを作成できませんでした。") from exc
 
 
+def _analysis_page_numbers(parsed_pages):
+    selected_pages = []
+    development_start = parsed_pages.get("page_development_start")
+    development_end = parsed_pages.get("page_development_end")
+    for key, page_number in parsed_pages.items():
+        if key in {"page_development_start", "page_development_end"}:
+            continue
+        if page_number is not None and page_number not in selected_pages:
+            selected_pages.append(page_number)
+    if development_start is not None and development_end is not None:
+        for page_number in range(development_start, development_end + 1):
+            if page_number not in selected_pages:
+                selected_pages.append(page_number)
+    return selected_pages
+
+
 def _analysis_prompt(parsed_pages):
     page_lines = "\n".join(
         f"- {PAGE_LABELS[key]}: {value}ページ" for key, value in parsed_pages.items() if value is not None
@@ -208,7 +230,7 @@ def _analysis_prompt(parsed_pages):
 - 天井高 height_m
 - 窓・ドアなどの開口部面積 opening_area_m2
 - 天井面積 ceiling_area_m2
-- 東西南北ごとの壁面積・開口部面積 wall_surfaces
+- 1面〜4面ごとの壁面積・開口部面積 wall_surfaces
 
 ルール:
 - 回答内の文章は、warnings と evidence を含めて必ず日本語で書いてください。
@@ -223,9 +245,11 @@ def _analysis_prompt(parsed_pages):
 - 収納・物入・SIC・CL・パントリー・廊下・ホール・階段は、個別寸法が読めない場合でも「一式」や展開図の複合部屋名として必ずroomsに含めてください。
 - 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
 - 開口部は外部開口と内部開口を分けて検討してください。
-- wall_surfaces は east, west, south, north の4方向を必ず返してください。
-- wall_surfaces の surface_area_m2 は開口部を差し引く前の壁面積、opening_area_m2 はその壁面の開口部面積にしてください。
-- 方位が図面から判断できない場合でも、平面図・展開図の位置関係から東西南北へ最も合理的に割り当て、根拠を evidence に書いてください。
+- wall_surfaces は face_1, face_2, face_3, face_4 の4面を必ず返してください。
+- 展開図が「1面」「2面」「3面」「4面」の表記なら、そのまま face_1〜face_4 に対応させてください。
+- 展開図が「A」「B」「C」「D」の表記なら、A=face_1、B=face_2、C=face_3、D=face_4 と読み替えてください。
+- wall_surfaces の surface_area_m2 は開口部を差し引く前の壁面積、opening_area_m2 はその面の開口部面積にしてください。
+- 展開図の面番号と部屋名の対応が不確かな場合は、根拠を evidence に書いて confidence を下げてください。
 - どうしても方向別の割り当てが不確かな場合は、合計値を均等配分せず、読めた壁面に配分して confidence を下げてください。
 - 外部開口は展開図の窓・玄関ドア・サッシを、展開図の縮尺と既知寸法から幅・高さを推定して部屋へ割り当ててください。
 - 2階バルコニーに面したサッシなど高さが読み取りにくい開口は、同種の1階サッシ高さを保守的に流用して推定してください。
@@ -251,12 +275,12 @@ def _analysis_schema():
     wall_surfaces_schema = {
         "type": "object",
         "properties": {
-            "east": surface_schema,
-            "west": surface_schema,
-            "south": surface_schema,
-            "north": surface_schema,
+            "face_1": surface_schema,
+            "face_2": surface_schema,
+            "face_3": surface_schema,
+            "face_4": surface_schema,
         },
-        "required": ["east", "west", "south", "north"],
+        "required": ["face_1", "face_2", "face_3", "face_4"],
         "additionalProperties": False,
     }
     room_schema = {
@@ -347,8 +371,11 @@ def _wall_surfaces_from_ai(value):
         return None
 
     surfaces = {}
-    for field in ("east", "west", "south", "north"):
-        surface = value.get(field)
+    surface_keys = (("east", "face_1"), ("west", "face_2"), ("south", "face_3"), ("north", "face_4"))
+    for field, ai_key in surface_keys:
+        surface = value.get(ai_key)
+        if surface is None:
+            surface = value.get(field)
         if not isinstance(surface, dict):
             return None
         surfaces[field] = {
@@ -465,7 +492,8 @@ def _sample_plan_rooms(parsed_pages=None):
         "page_1f_plan": 5,
         "page_2f_plan": 6,
         "page_3f_plan": None,
-        "page_2f_development": 8,
+        "page_development_start": 8,
+        "page_development_end": 8,
     }
     height = Decimal("2.40")
     zero = Decimal("0")
@@ -485,7 +513,7 @@ def _sample_plan_rooms(parsed_pages=None):
 
     if parsed_pages.get("page_2f_plan"):
         page = parsed_pages["page_2f_plan"]
-        development_page = parsed_pages.get("page_2f_development")
+        development_page = parsed_pages.get("page_development_start")
         hallway_note = f"{page}P/{development_page}P: 図面寸法から概算" if development_page else f"{page}P: 図面寸法から概算"
         rooms.extend([
         AnalyzedRoom("2F LDK", Decimal("19.10"), height, zero, Decimal("22.64"), f"{page}P: 13.68帖"),

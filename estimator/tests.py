@@ -54,10 +54,10 @@ class WallpaperEstimateTests(TestCase):
                     Decimal("20"),
                     "推定開口: 展開図から推定",
                     {
-                        "east": {"surface_area_m2": Decimal("10.00"), "opening_area_m2": Decimal("1.00")},
-                        "west": {"surface_area_m2": Decimal("11.00"), "opening_area_m2": Decimal("1.20")},
-                        "south": {"surface_area_m2": Decimal("12.00"), "opening_area_m2": Decimal("0.80")},
-                        "north": {"surface_area_m2": Decimal("10.20"), "opening_area_m2": Decimal("1.20")},
+                        "face_1": {"surface_area_m2": Decimal("10.00"), "opening_area_m2": Decimal("1.00")},
+                        "face_2": {"surface_area_m2": Decimal("11.00"), "opening_area_m2": Decimal("1.20")},
+                        "face_3": {"surface_area_m2": Decimal("12.00"), "opening_area_m2": Decimal("0.80")},
+                        "face_4": {"surface_area_m2": Decimal("10.20"), "opening_area_m2": Decimal("1.20")},
                     },
                 )
             ],
@@ -518,7 +518,8 @@ class WallpaperEstimateTests(TestCase):
             "page_1f_plan": 5,
             "page_2f_plan": None,
             "page_3f_plan": None,
-            "page_1f_development": 8,
+            "page_development_start": 8,
+            "page_development_end": 8,
         }
         for analyzed_room in _sample_plan_rooms(page_map):
             Room.objects.create(
@@ -544,10 +545,10 @@ class WallpaperEstimateTests(TestCase):
                     "opening_area_m2": 3.25,
                     "ceiling_area_m2": 22.64,
                     "wall_surfaces": {
-                        "east": {"surface_area_m2": 8.1, "opening_area_m2": 1.0},
-                        "west": {"surface_area_m2": 8.2, "opening_area_m2": 0.5},
-                        "south": {"surface_area_m2": 8.3, "opening_area_m2": 1.25},
-                        "north": {"surface_area_m2": 8.4, "opening_area_m2": 0.5},
+                        "face_1": {"surface_area_m2": 8.1, "opening_area_m2": 1.0},
+                        "face_2": {"surface_area_m2": 8.2, "opening_area_m2": 0.5},
+                        "face_3": {"surface_area_m2": 8.3, "opening_area_m2": 1.25},
+                        "face_4": {"surface_area_m2": 8.4, "opening_area_m2": 0.5},
                     },
                     "confidence": 0.82,
                     "evidence": "2F平面図: LDK 13.68帖、C.H 2400",
@@ -700,13 +701,14 @@ class WallpaperEstimateTests(TestCase):
                 source_file.name,
                 {
                     "page_1f_plan": 2,
-                    "page_2f_plan": 4,
+                    "page_development_start": 3,
+                    "page_development_end": 5,
                     "page_1f_ceiling_plan": 2,
                     "page_3f_plan": None,
                 },
             )
 
-            self.assertEqual(len(PdfReader(selected_path).pages), 2)
+            self.assertEqual(len(PdfReader(selected_path).pages), 4)
         finally:
             Path(source_file.name).unlink(missing_ok=True)
             if selected_path:

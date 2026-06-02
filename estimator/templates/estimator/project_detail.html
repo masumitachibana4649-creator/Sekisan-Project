@@ -95,9 +95,8 @@
       <span>1F平面図: {{ project.page_1f_plan }}</span>
       <span>2F平面図: {{ project.page_2f_plan }}</span>
       <span>3F平面図: {{ project.page_3f_plan }}</span>
-      <span>1F展開図: {{ project.page_1f_development }}</span>
-      <span>2F展開図: {{ project.page_2f_development }}</span>
-      <span>3F展開図: {{ project.page_3f_development }}</span>
+      <span>展開図開始頁: {{ project.page_development_start }}</span>
+      <span>展開図終了頁: {{ project.page_development_end }}</span>
       <span>1F天井伏図: {{ project.page_1f_ceiling_plan }}</span>
       <span>2F天井伏図: {{ project.page_2f_ceiling_plan }}</span>
       <span>3F天井伏図: {{ project.page_3f_ceiling_plan }}</span>
@@ -105,7 +104,7 @@
   {% endif %}
   <div class="result-table">
     <div class="result-head">
-      <span>部屋名</span><span>東壁面</span><span>西壁面</span><span>南壁面</span><span>北壁面</span><span>天井</span><span>面積/本数</span><span>備考</span>
+      <span>部屋名</span><span>1面</span><span>2面</span><span>3面</span><span>4面</span><span>天井</span><span>面積/本数</span><span>備考</span>
     </div>
     <div class="result-body">
     {% for room in rooms %}

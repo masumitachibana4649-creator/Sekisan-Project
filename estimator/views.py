@@ -108,9 +108,8 @@ def project_create(request):
             page_1f_plan=_page_value(request.POST.get("page_1f_plan"), "ー"),
             page_2f_plan=_page_value(request.POST.get("page_2f_plan"), "ー"),
             page_3f_plan=_page_value(request.POST.get("page_3f_plan"), "ー"),
-            page_1f_development=_page_value(request.POST.get("page_1f_development"), "ー"),
-            page_2f_development=_page_value(request.POST.get("page_2f_development"), "ー"),
-            page_3f_development=_page_value(request.POST.get("page_3f_development"), "ー"),
+            page_development_start=_page_value(request.POST.get("page_development_start"), "ー"),
+            page_development_end=_page_value(request.POST.get("page_development_end"), "ー"),
             page_1f_ceiling_plan=_page_value(request.POST.get("page_1f_ceiling_plan"), "ー"),
             page_2f_ceiling_plan=_page_value(request.POST.get("page_2f_ceiling_plan"), "ー"),
             page_3f_ceiling_plan=_page_value(request.POST.get("page_3f_ceiling_plan"), "ー"),
@@ -301,10 +300,10 @@ def project_csv(request, pk):
         "天井高(m)",
         "開口部(m2)",
         "天井(m2)",
-        "東壁面壁紙",
-        "西壁面壁紙",
-        "南壁面壁紙",
-        "北壁面壁紙",
+        "1面壁紙",
+        "2面壁紙",
+        "3面壁紙",
+        "4面壁紙",
         "天井壁紙",
         "必要面積(m2)",
         "部屋別積上方式ロール本数",
@@ -370,13 +369,23 @@ def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None,
                 if surface_type == "ceiling":
                     created.ceiling_surface_area_m2 = room.ceiling_area_m2
                     continue
-                surface = room.wall_surfaces.get(field, {})
+                surface = _wall_surface_value(room.wall_surfaces, field)
                 setattr(created, f"{field}_surface_area_m2", surface.get("surface_area_m2", Decimal("0")))
                 setattr(created, f"{field}_opening_area_m2", surface.get("opening_area_m2", Decimal("0")))
             created.sync_totals_from_surface_measurements()
         else:
             created.set_default_surface_measurements()
         created.save()
+
+
+def _wall_surface_value(wall_surfaces, field):
+    face_keys = {
+        "east": "face_1",
+        "west": "face_2",
+        "south": "face_3",
+        "north": "face_4",
+    }
+    return wall_surfaces.get(field) or wall_surfaces.get(face_keys.get(field), {}) or {}
 
 
 def _validate_drawing_pdf(uploaded_file):
@@ -480,9 +489,8 @@ def _project_page_map(project):
         "page_1f_plan": project.page_1f_plan,
         "page_2f_plan": project.page_2f_plan,
         "page_3f_plan": project.page_3f_plan,
-        "page_1f_development": project.page_1f_development,
-        "page_2f_development": project.page_2f_development,
-        "page_3f_development": project.page_3f_development,
+        "page_development_start": project.page_development_start,
+        "page_development_end": project.page_development_end,
         "page_1f_ceiling_plan": project.page_1f_ceiling_plan,
         "page_2f_ceiling_plan": project.page_2f_ceiling_plan,
         "page_3f_ceiling_plan": project.page_3f_ceiling_plan,
@@ -559,9 +567,8 @@ def _clone_project(project, name):
         page_1f_plan=project.page_1f_plan,
         page_2f_plan=project.page_2f_plan,
         page_3f_plan=project.page_3f_plan,
-        page_1f_development=project.page_1f_development,
-        page_2f_development=project.page_2f_development,
-        page_3f_development=project.page_3f_development,
+        page_development_start=project.page_development_start,
+        page_development_end=project.page_development_end,
         page_1f_ceiling_plan=project.page_1f_ceiling_plan,
         page_2f_ceiling_plan=project.page_2f_ceiling_plan,
         page_3f_ceiling_plan=project.page_3f_ceiling_plan,
