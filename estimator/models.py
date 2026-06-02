@@ -5,6 +5,7 @@ from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 from decimal import Decimal, ROUND_CEILING
 import logging
+import re
 
 
 WALLPAPER_TOTAL_METHOD = "wallpaper_total"
@@ -361,6 +362,24 @@ class Room(models.Model):
 
     def __str__(self):
         return f"{self.project.name} / {self.name}"
+
+    @property
+    def display_name(self):
+        name = str(self.name or "").strip()
+        if re.match(r"^[1-9]\s*(?:F|階)", name, re.IGNORECASE):
+            return name
+
+        floor = self._inferred_floor_label()
+        if floor:
+            return f"{floor} {name}".strip()
+        return name
+
+    def _inferred_floor_label(self):
+        source = f"{self.name} {self.note}"
+        match = re.search(r"([1-9])\s*(?:F|階)", source, re.IGNORECASE)
+        if match:
+            return f"{match.group(1)}F"
+        return ""
 
     @property
     def wall_area(self):

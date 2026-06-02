@@ -44,7 +44,20 @@ class WallpaperEstimateTests(TestCase):
         self.client.force_login(self.user)
         analysis = PdfAnalysisResult(
             rooms=[
-                AnalyzedRoom("LDK", Decimal("18"), Decimal("2.4"), Decimal("4.2"), Decimal("20"), "推定開口: 展開図から推定")
+                AnalyzedRoom(
+                    "LDK",
+                    Decimal("18"),
+                    Decimal("2.4"),
+                    Decimal("4.2"),
+                    Decimal("20"),
+                    "推定開口: 展開図から推定",
+                    {
+                        "east": {"surface_area_m2": Decimal("10.00"), "opening_area_m2": Decimal("1.00")},
+                        "west": {"surface_area_m2": Decimal("11.00"), "opening_area_m2": Decimal("1.20")},
+                        "south": {"surface_area_m2": Decimal("12.00"), "opening_area_m2": Decimal("0.80")},
+                        "north": {"surface_area_m2": Decimal("10.20"), "opening_area_m2": Decimal("1.20")},
+                    },
+                )
             ],
             memo="PDF AI読取",
         )
@@ -66,6 +79,11 @@ class WallpaperEstimateTests(TestCase):
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
         self.assertEqual(project.uploaded_by, self.user)
         self.assertEqual(project.rooms.count(), 1)
+        room = project.rooms.get()
+        self.assertEqual(room.east_surface_area_m2, Decimal("10.00"))
+        self.assertEqual(room.west_surface_area_m2, Decimal("11.00"))
+        self.assertEqual(room.south_opening_area_m2, Decimal("0.80"))
+        self.assertEqual(room.opening_area_m2, Decimal("4.20"))
         self.assertEqual(project.total_rolls, 2)
 
     def test_project_create_requires_login(self):
@@ -114,7 +132,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "見積金額")
         self.assertContains(response, "要再計算")
         self.assertContains(response, "積算が作成できませんでした。PDF読取から再計算できます。")
-        self.assertContains(response, f'action="{reverse("project_recalculate", args=[failed.pk])}"')
+        self.assertNotContains(response, f'action="{reverse("project_recalculate", args=[failed.pk])}"')
+        self.assertContains(response, f'href="{reverse("project_detail", args=[failed.pk])}"')
         self.assertContains(response, "結果を見る")
 
     def test_signup_creates_general_user_and_logs_in(self):
@@ -187,6 +206,67 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "再計算")
         self.assertContains(response, f'action="{reverse("project_recalculate", args=[project.pk])}"')
         self.assertContains(response, 'form="project-recalculate-form"')
+        self.assertNotContains(response, 'href="' + reverse("project_detail", args=[project.pk]) + '?edit=1"')
+
+    def test_project_detail_action_buttons_follow_estimate_state(self):
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="積算完了案件", uploaded_by=self.user, drawing_pdf="drawings/dummy.pdf")
+        Room.objects.create(
+            project=project,
+            name="トイレ",
+            perimeter_m=Decimal("6"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("2"),
+            note="根拠: 1F平面図",
+        )
+
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+        self.assertContains(response, "編集")
+        self.assertNotContains(response, ">再計算</button>")
+
+        response = self.client.get(f'{reverse("project_detail", args=[project.pk])}?edit=1')
+        self.assertContains(response, "表示に戻る")
+        self.assertContains(response, ">再計算</button>")
+        self.assertNotContains(response, 'href="' + reverse("project_detail", args=[project.pk]) + '?edit=1"')
+
+    def test_room_display_name_includes_floor_in_detail_and_csv(self):
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="階表示案件", uploaded_by=self.user)
+        Room.objects.create(
+            project=project,
+            name="トイレ",
+            perimeter_m=Decimal("6"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("2"),
+            note="根拠: 1F平面図",
+        )
+
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+        self.assertContains(response, "1. 1F トイレ")
+
+        response = self.client.get(reverse("project_csv", args=[project.pk]))
+        self.assertContains(response, "1F トイレ")
+
+    def test_estimated_openings_are_blue_in_display_mode(self):
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="推定表示案件", uploaded_by=self.user)
+        Room.objects.create(
+            project=project,
+            name="LDK",
+            perimeter_m=Decimal("18"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("1"),
+            ceiling_area_m2=Decimal("20"),
+            east_surface_area_m2=Decimal("10"),
+            east_opening_area_m2=Decimal("1"),
+            note="推定開口: 展開図から推定",
+        )
+
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+
+        self.assertContains(response, 'class="estimated-value">1')
 
     @override_settings(
         SUPABASE_URL="https://example.supabase.co",
@@ -461,6 +541,12 @@ class WallpaperEstimateTests(TestCase):
                     "height_m": 2.4,
                     "opening_area_m2": 3.25,
                     "ceiling_area_m2": 22.64,
+                    "wall_surfaces": {
+                        "east": {"surface_area_m2": 8.1, "opening_area_m2": 1.0},
+                        "west": {"surface_area_m2": 8.2, "opening_area_m2": 0.5},
+                        "south": {"surface_area_m2": 8.3, "opening_area_m2": 1.25},
+                        "north": {"surface_area_m2": 8.4, "opening_area_m2": 0.5},
+                    },
                     "confidence": 0.82,
                     "evidence": "2F平面図: LDK 13.68帖、C.H 2400",
                 }
@@ -477,6 +563,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(room.height_m, Decimal("2.40"))
         self.assertEqual(room.opening_area_m2, Decimal("3.25"))
         self.assertEqual(room.ceiling_area_m2, Decimal("22.64"))
+        self.assertEqual(room.wall_surfaces["east"]["surface_area_m2"], Decimal("8.10"))
+        self.assertEqual(room.wall_surfaces["south"]["opening_area_m2"], Decimal("1.25"))
         self.assertIn("根拠: 2F平面図", room.note)
         self.assertIn("AI信頼度: 0.82", room.note)
         self.assertEqual(result["warnings"], ["開口部は一部推定"])

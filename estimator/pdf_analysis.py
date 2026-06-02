@@ -18,6 +18,7 @@ class AnalyzedRoom:
     opening_area_m2: Decimal
     ceiling_area_m2: Decimal
     note: str
+    wall_surfaces: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -173,6 +174,7 @@ def _analysis_prompt(parsed_pages):
 - 天井高 height_m
 - 窓・ドアなどの開口部面積 opening_area_m2
 - 天井面積 ceiling_area_m2
+- 東西南北ごとの壁面積・開口部面積 wall_surfaces
 
 ルール:
 - 回答内の文章は、warnings と evidence を含めて必ず日本語で書いてください。
@@ -186,6 +188,10 @@ def _analysis_prompt(parsed_pages):
 - 廊下、階段、玄関、トイレ、洗面所、収納、物入もクロス施工対象として含めてください。
 - 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
 - 開口部は外部開口と内部開口を分けて検討してください。
+- wall_surfaces は east, west, south, north の4方向を必ず返してください。
+- wall_surfaces の surface_area_m2 は開口部を差し引く前の壁面積、opening_area_m2 はその壁面の開口部面積にしてください。
+- 方位が図面から判断できない場合でも、平面図・展開図の位置関係から東西南北へ最も合理的に割り当て、根拠を evidence に書いてください。
+- どうしても方向別の割り当てが不確かな場合は、合計値を均等配分せず、読めた壁面に配分して confidence を下げてください。
 - 外部開口は展開図の窓・玄関ドア・サッシを、展開図の縮尺と既知寸法から幅・高さを推定して部屋へ割り当ててください。
 - 2階バルコニーに面したサッシなど高さが読み取りにくい開口は、同種の1階サッシ高さを保守的に流用して推定してください。
 - 内部開口は平面図の室内扉・収納扉を、平面図の縮尺と既知寸法から幅を推定し、高さが読めない場合は標準建具高さ2.0mで控えめに推定してください。
@@ -198,6 +204,26 @@ def _analysis_prompt(parsed_pages):
 
 
 def _analysis_schema():
+    surface_schema = {
+        "type": "object",
+        "properties": {
+            "surface_area_m2": {"type": "number", "minimum": 0},
+            "opening_area_m2": {"type": "number", "minimum": 0},
+        },
+        "required": ["surface_area_m2", "opening_area_m2"],
+        "additionalProperties": False,
+    }
+    wall_surfaces_schema = {
+        "type": "object",
+        "properties": {
+            "east": surface_schema,
+            "west": surface_schema,
+            "south": surface_schema,
+            "north": surface_schema,
+        },
+        "required": ["east", "west", "south", "north"],
+        "additionalProperties": False,
+    }
     room_schema = {
         "type": "object",
         "properties": {
@@ -206,6 +232,7 @@ def _analysis_schema():
             "height_m": {"type": "number", "minimum": 0},
             "opening_area_m2": {"type": "number", "minimum": 0},
             "ceiling_area_m2": {"type": "number", "minimum": 0},
+            "wall_surfaces": wall_surfaces_schema,
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
             "evidence": {"type": "string"},
         },
@@ -215,6 +242,7 @@ def _analysis_schema():
             "height_m",
             "opening_area_m2",
             "ceiling_area_m2",
+            "wall_surfaces",
             "confidence",
             "evidence",
         ],
@@ -262,6 +290,7 @@ def _parse_ai_analysis_response(response_text):
         if evidence:
             note_parts.append(f"根拠: {evidence}")
         note_parts.append(f"AI信頼度: {confidence}")
+        wall_surfaces = _wall_surfaces_from_ai(room.get("wall_surfaces"))
         rooms.append(
             AnalyzedRoom(
                 name=name,
@@ -270,11 +299,28 @@ def _parse_ai_analysis_response(response_text):
                 opening_area_m2=_decimal_from_ai(room.get("opening_area_m2"), "0"),
                 ceiling_area_m2=_decimal_from_ai(room.get("ceiling_area_m2"), "0"),
                 note=" / ".join(note_parts),
+                wall_surfaces=wall_surfaces,
             )
         )
 
     warnings = [str(warning).strip() for warning in payload.get("warnings", []) if str(warning).strip()]
     return {"rooms": rooms, "warnings": warnings}
+
+
+def _wall_surfaces_from_ai(value):
+    if not isinstance(value, dict):
+        return None
+
+    surfaces = {}
+    for field in ("east", "west", "south", "north"):
+        surface = value.get(field)
+        if not isinstance(surface, dict):
+            return None
+        surfaces[field] = {
+            "surface_area_m2": _decimal_from_ai(surface.get("surface_area_m2"), "0"),
+            "opening_area_m2": _decimal_from_ai(surface.get("opening_area_m2"), "0"),
+        }
+    return surfaces
 
 
 def _validate_room_extraction(pdf_path, parsed_pages, rooms):

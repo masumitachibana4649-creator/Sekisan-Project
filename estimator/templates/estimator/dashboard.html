@@ -63,10 +63,7 @@
               <span class="row-total">{{ project.total_rolls }}本</span>
               <a class="row-action-link" href="{% url 'project_detail' project.pk %}">結果を見る</a>
             {% elif project.has_drawing_pdf %}
-              <form method="post" action="{% url 'project_recalculate' project.pk %}">
-                {% csrf_token %}
-                <button class="row-action-button" type="submit">再計算</button>
-              </form>
+              <a class="row-action-link" href="{% url 'project_detail' project.pk %}">結果を見る</a>
             {% else %}
               <a class="row-action-link" href="{% url 'project_detail' project.pk %}">詳細を見る</a>
             {% endif %}

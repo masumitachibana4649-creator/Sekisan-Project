@@ -312,7 +312,7 @@ def project_csv(request, pk):
     ])
     for room in project.rooms.all():
         writer.writerow([
-            room.name,
+            room.display_name,
             room.perimeter_m,
             room.height_m,
             room.opening_area_m2,
@@ -365,7 +365,17 @@ def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None,
         )
         for field, _label, _surface_type in SURFACE_FIELDS:
             created.apply_wallpaper(field, surface_wallpapers.get(field, default_wallpaper))
-        created.set_default_surface_measurements()
+        if room.wall_surfaces:
+            for field, _label, surface_type in SURFACE_FIELDS:
+                if surface_type == "ceiling":
+                    created.ceiling_surface_area_m2 = room.ceiling_area_m2
+                    continue
+                surface = room.wall_surfaces.get(field, {})
+                setattr(created, f"{field}_surface_area_m2", surface.get("surface_area_m2", Decimal("0")))
+                setattr(created, f"{field}_opening_area_m2", surface.get("opening_area_m2", Decimal("0")))
+            created.sync_totals_from_surface_measurements()
+        else:
+            created.set_default_surface_measurements()
         created.save()
 
 
