@@ -44,7 +44,7 @@ class WallpaperEstimateTests(TestCase):
         self.client.force_login(self.user)
         analysis = PdfAnalysisResult(
             rooms=[
-                AnalyzedRoom("LDK", Decimal("18"), Decimal("2.4"), Decimal("4.2"), Decimal("20"), "推定開口: 立面図から推定")
+                AnalyzedRoom("LDK", Decimal("18"), Decimal("2.4"), Decimal("4.2"), Decimal("20"), "推定開口: 展開図から推定")
             ],
             memo="PDF AI読取",
         )
@@ -398,7 +398,7 @@ class WallpaperEstimateTests(TestCase):
             "page_1f_plan": 5,
             "page_2f_plan": None,
             "page_3f_plan": None,
-            "page_section": 8,
+            "page_1f_development": 8,
         }
         for analyzed_room in _sample_plan_rooms(page_map):
             Room.objects.create(

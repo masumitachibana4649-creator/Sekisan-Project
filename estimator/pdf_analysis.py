@@ -30,11 +30,12 @@ PAGE_LABELS = {
     "page_1f_plan": "1F平面図",
     "page_2f_plan": "2F平面図",
     "page_3f_plan": "3F平面図",
-    "page_east_elevation": "東側立面図",
-    "page_west_elevation": "西側立面図",
-    "page_south_elevation": "南側立面図",
-    "page_north_elevation": "北側立面図",
-    "page_section": "断面図",
+    "page_1f_development": "1F展開図",
+    "page_2f_development": "2F展開図",
+    "page_3f_development": "3F展開図",
+    "page_1f_ceiling_plan": "1F天井伏図",
+    "page_2f_ceiling_plan": "2F天井伏図",
+    "page_3f_ceiling_plan": "3F天井伏図",
 }
 
 PLAN_PAGE_KEYS = ("page_1f_plan", "page_2f_plan", "page_3f_plan")
@@ -185,10 +186,11 @@ def _analysis_prompt(parsed_pages):
 - 廊下、階段、玄関、トイレ、洗面所、収納、物入もクロス施工対象として含めてください。
 - 周長が直接読めないが部屋寸法や面積表から合理的に算出できる場合は算出してください。
 - 開口部は外部開口と内部開口を分けて検討してください。
-- 外部開口は立面図の窓・玄関ドア・サッシを、立面図の縮尺と既知寸法から幅・高さを推定して部屋へ割り当ててください。
+- 外部開口は展開図の窓・玄関ドア・サッシを、展開図の縮尺と既知寸法から幅・高さを推定して部屋へ割り当ててください。
 - 2階バルコニーに面したサッシなど高さが読み取りにくい開口は、同種の1階サッシ高さを保守的に流用して推定してください。
 - 内部開口は平面図の室内扉・収納扉を、平面図の縮尺と既知寸法から幅を推定し、高さが読めない場合は標準建具高さ2.0mで控えめに推定してください。
-- 寸法明記のない開口は過大控除を避け、控えめな値にしてください。推定開口を使った場合は evidence に必ず「推定開口」「立面図/平面図」「推定した幅・高さ」「外部開口/内部開口の内訳」を書いてください。
+- 天井面積は平面図または天井伏図から読み取れる寸法・面積を優先してください。
+- 寸法明記のない開口は過大控除を避け、控えめな値にしてください。推定開口を使った場合は evidence に必ず「推定開口」「展開図/平面図」「推定した幅・高さ」「外部開口/内部開口の内訳」を書いてください。
 - 開口部が図面上で確認できない場合だけ opening_area_m2 を 0 にし、warnings に理由を入れてください。
 - 不確かな値は evidence に根拠と推定理由を書き、confidence を下げてください。
 - ロール本数、ロス率込み面積、金額は計算しないでください。アプリ側で計算します。
@@ -375,7 +377,7 @@ def _sample_plan_rooms(parsed_pages=None):
         "page_1f_plan": 5,
         "page_2f_plan": 6,
         "page_3f_plan": None,
-        "page_section": 8,
+        "page_2f_development": 8,
     }
     height = Decimal("2.40")
     zero = Decimal("0")
@@ -395,8 +397,8 @@ def _sample_plan_rooms(parsed_pages=None):
 
     if parsed_pages.get("page_2f_plan"):
         page = parsed_pages["page_2f_plan"]
-        section_page = parsed_pages.get("page_section")
-        hallway_note = f"{page}P/{section_page}P: 図面寸法から概算" if section_page else f"{page}P: 図面寸法から概算"
+        development_page = parsed_pages.get("page_2f_development")
+        hallway_note = f"{page}P/{development_page}P: 図面寸法から概算" if development_page else f"{page}P: 図面寸法から概算"
         rooms.extend([
         AnalyzedRoom("2F LDK", Decimal("19.10"), height, zero, Decimal("22.64"), f"{page}P: 13.68帖"),
         AnalyzedRoom("2F 洗面所", Decimal("8.86"), height, zero, Decimal("4.83"), f"{page}P: 2.50×1.93m"),

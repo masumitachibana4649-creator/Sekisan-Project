@@ -108,11 +108,12 @@ def project_create(request):
             page_1f_plan=_page_value(request.POST.get("page_1f_plan"), "ー"),
             page_2f_plan=_page_value(request.POST.get("page_2f_plan"), "ー"),
             page_3f_plan=_page_value(request.POST.get("page_3f_plan"), "ー"),
-            page_east_elevation=_page_value(request.POST.get("page_east_elevation"), "ー"),
-            page_west_elevation=_page_value(request.POST.get("page_west_elevation"), "ー"),
-            page_south_elevation=_page_value(request.POST.get("page_south_elevation"), "ー"),
-            page_north_elevation=_page_value(request.POST.get("page_north_elevation"), "ー"),
-            page_section=_page_value(request.POST.get("page_section"), "ー"),
+            page_1f_development=_page_value(request.POST.get("page_1f_development"), "ー"),
+            page_2f_development=_page_value(request.POST.get("page_2f_development"), "ー"),
+            page_3f_development=_page_value(request.POST.get("page_3f_development"), "ー"),
+            page_1f_ceiling_plan=_page_value(request.POST.get("page_1f_ceiling_plan"), "ー"),
+            page_2f_ceiling_plan=_page_value(request.POST.get("page_2f_ceiling_plan"), "ー"),
+            page_3f_ceiling_plan=_page_value(request.POST.get("page_3f_ceiling_plan"), "ー"),
             memo=request.POST.get("memo", ""),
             **pdf_fields,
         )
@@ -454,7 +455,7 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
 
 def _is_estimated_opening(room):
     return room.opening_area_m2 > 0 and any(
-        marker in room.note for marker in ("推定", "立面図", "平面図", "スケール")
+        marker in room.note for marker in ("推定", "展開図", "平面図", "スケール")
     )
 
 
@@ -469,11 +470,12 @@ def _project_page_map(project):
         "page_1f_plan": project.page_1f_plan,
         "page_2f_plan": project.page_2f_plan,
         "page_3f_plan": project.page_3f_plan,
-        "page_east_elevation": project.page_east_elevation,
-        "page_west_elevation": project.page_west_elevation,
-        "page_south_elevation": project.page_south_elevation,
-        "page_north_elevation": project.page_north_elevation,
-        "page_section": project.page_section,
+        "page_1f_development": project.page_1f_development,
+        "page_2f_development": project.page_2f_development,
+        "page_3f_development": project.page_3f_development,
+        "page_1f_ceiling_plan": project.page_1f_ceiling_plan,
+        "page_2f_ceiling_plan": project.page_2f_ceiling_plan,
+        "page_3f_ceiling_plan": project.page_3f_ceiling_plan,
     }
 
 
@@ -547,11 +549,12 @@ def _clone_project(project, name):
         page_1f_plan=project.page_1f_plan,
         page_2f_plan=project.page_2f_plan,
         page_3f_plan=project.page_3f_plan,
-        page_east_elevation=project.page_east_elevation,
-        page_west_elevation=project.page_west_elevation,
-        page_south_elevation=project.page_south_elevation,
-        page_north_elevation=project.page_north_elevation,
-        page_section=project.page_section,
+        page_1f_development=project.page_1f_development,
+        page_2f_development=project.page_2f_development,
+        page_3f_development=project.page_3f_development,
+        page_1f_ceiling_plan=project.page_1f_ceiling_plan,
+        page_2f_ceiling_plan=project.page_2f_ceiling_plan,
+        page_3f_ceiling_plan=project.page_3f_ceiling_plan,
         memo=project.memo,
     )
     return clone

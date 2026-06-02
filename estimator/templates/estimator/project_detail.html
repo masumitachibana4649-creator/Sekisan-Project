@@ -82,18 +82,19 @@
     <p class="memo-box">{{ project.memo|sentence_breaks }}</p>
   {% endif %}
   {% if has_estimated_openings %}
-    <p class="estimate-note">青文字は立面図・平面図の縮尺と既知寸法からの推定値なので注意</p>
+    <p class="estimate-note">青文字は展開図・平面図の縮尺と既知寸法からの推定値なので注意</p>
   {% endif %}
   {% if project.has_drawing_pdf %}
     <div class="page-map-summary">
       <span>1F平面図: {{ project.page_1f_plan }}</span>
       <span>2F平面図: {{ project.page_2f_plan }}</span>
       <span>3F平面図: {{ project.page_3f_plan }}</span>
-      <span>東側立面図: {{ project.page_east_elevation }}</span>
-      <span>西側立面図: {{ project.page_west_elevation }}</span>
-      <span>南側立面図: {{ project.page_south_elevation }}</span>
-      <span>北側立面図: {{ project.page_north_elevation }}</span>
-      <span>断面図: {{ project.page_section }}</span>
+      <span>1F展開図: {{ project.page_1f_development }}</span>
+      <span>2F展開図: {{ project.page_2f_development }}</span>
+      <span>3F展開図: {{ project.page_3f_development }}</span>
+      <span>1F天井伏図: {{ project.page_1f_ceiling_plan }}</span>
+      <span>2F天井伏図: {{ project.page_2f_ceiling_plan }}</span>
+      <span>3F天井伏図: {{ project.page_3f_ceiling_plan }}</span>
     </div>
   {% endif %}
   <div class="result-table">
