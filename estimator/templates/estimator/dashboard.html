@@ -36,13 +36,43 @@
     {% if request.user.is_authenticated %}
     <div class="project-list">
       {% for project in projects %}
-        <a class="project-row" href="{% url 'project_detail' project.pk %}">
-          <span>
-            <strong>{{ project.name }}</strong>
+        {% with room_count=project.rooms.all|length %}
+        <div class="project-row {% if project.has_drawing_pdf and room_count == 0 %}project-row-failed{% endif %}">
+          <a class="project-row-main" href="{% url 'project_detail' project.pk %}">
+            <span class="project-row-title">
+              {% if room_count > 0 %}
+                <span class="status-badge status-complete">積算完了</span>
+              {% elif project.has_drawing_pdf %}
+                <span class="status-badge status-retry">要再計算</span>
+              {% else %}
+                <span class="status-badge status-draft">未計算</span>
+              {% endif %}
+              <strong>{{ project.name }}</strong>
+            </span>
             <small>{{ project.client_name|default:"顧客名未設定" }} / {{ project.uploaded_by.username }} / {{ project.updated_at|date:"Y/m/d H:i" }}</small>
+            {% if room_count > 0 %}
+              <span class="project-row-note">必要面積 {{ project.total_area|floatformat:2 }} m2 / 見積金額 {{ project.total_cost }} 円</span>
+            {% elif project.has_drawing_pdf %}
+              <span class="project-row-note warning">積算が作成できませんでした。PDF読取から再計算できます。</span>
+            {% else %}
+              <span class="project-row-note">図面PDFを登録して積算を開始してください。</span>
+            {% endif %}
+          </a>
+          <span class="project-row-action">
+            {% if room_count > 0 %}
+              <span class="row-total">{{ project.total_rolls }}本</span>
+              <a class="row-action-link" href="{% url 'project_detail' project.pk %}">結果を見る</a>
+            {% elif project.has_drawing_pdf %}
+              <form method="post" action="{% url 'project_recalculate' project.pk %}">
+                {% csrf_token %}
+                <button class="row-action-button" type="submit">再計算</button>
+              </form>
+            {% else %}
+              <a class="row-action-link" href="{% url 'project_detail' project.pk %}">詳細を見る</a>
+            {% endif %}
           </span>
-          <span class="row-total">{{ project.total_rolls }}本</span>
-        </a>
+        </div>
+        {% endwith %}
       {% empty %}
         <div class="empty-state">
           <strong>積算データはまだありません</strong>

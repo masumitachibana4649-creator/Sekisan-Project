@@ -17,6 +17,12 @@
   </div>
 </section>
 
+{% if project.has_drawing_pdf %}
+  <form id="project-recalculate-form" method="post" action="{% url 'project_recalculate' project.pk %}" data-estimate-form>
+    {% csrf_token %}
+  </form>
+{% endif %}
+
 <section class="summary-grid">
   <div><span>必要面積</span><strong>{{ project.total_area|floatformat:2 }} m2</strong></div>
   <div><span>ロール本数</span><strong>{{ project.total_rolls }} 本</strong></div>
@@ -67,11 +73,8 @@
       <a class="secondary-action" href="{% url 'project_detail' project.pk %}{% if not edit_mode %}?edit=1{% endif %}">
         {% if edit_mode %}表示に戻る{% else %}編集{% endif %}
       </a>
-      {% if edit_mode and project.has_drawing_pdf %}
-        <form method="post" action="{% url 'project_recalculate' project.pk %}" data-estimate-form>
-          {% csrf_token %}
-          <button class="secondary-action" type="submit">再計算</button>
-        </form>
+      {% if project.has_drawing_pdf %}
+        <button class="secondary-action" type="submit" form="project-recalculate-form">再計算</button>
       {% endif %}
       {% if project.has_drawing_pdf %}
         <a href="{% url 'project_pdf' project.pk %}" target="_blank" rel="noopener">PDFを開く</a>

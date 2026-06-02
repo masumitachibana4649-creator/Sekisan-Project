@@ -268,6 +268,7 @@ h2 {
 .project-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 16px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -275,10 +276,65 @@ h2 {
   background: #fff;
 }
 
+.project-row-failed {
+  border-color: #f1c7a5;
+  background: #fffaf5;
+}
+
+.project-row-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.project-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.status-complete {
+  color: var(--green-dark);
+  background: #e3f1ea;
+}
+
+.status-retry {
+  color: #9a4a12;
+  background: #ffe8d1;
+}
+
+.status-draft {
+  color: var(--muted);
+  background: #edf0ee;
+}
+
 .project-row small {
   display: block;
   color: var(--muted);
-  margin-top: 4px;
+}
+
+.project-row-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.project-row-note.warning {
+  color: #9a4a12;
 }
 
 .row-total {
@@ -286,6 +342,36 @@ h2 {
   color: var(--green);
   white-space: nowrap;
   text-align: right;
+}
+
+.project-row-action {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.project-row-action form {
+  margin: 0;
+}
+
+.row-action-link,
+.row-action-button {
+  border: 0;
+  border-radius: 8px;
+  min-height: 34px;
+  padding: 7px 11px;
+  color: var(--green-dark);
+  background: #edf4f0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.project-row-failed .row-action-button {
+  color: #9a4a12;
+  background: #ffe8d1;
 }
 
 .empty-state {

@@ -94,6 +94,29 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, self.user.username)
         self.assertNotContains(response, "他人の案件")
 
+    def test_dashboard_distinguishes_complete_and_failed_estimates(self):
+        completed = Project.objects.create(name="積算完了案件", uploaded_by=self.user)
+        Room.objects.create(
+            project=completed,
+            name="LDK",
+            perimeter_m=Decimal("18"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("20"),
+        )
+        failed = Project.objects.create(name="積算失敗案件", uploaded_by=self.user, drawing_pdf="drawings/dummy.pdf")
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(response, "積算完了")
+        self.assertContains(response, "必要面積")
+        self.assertContains(response, "見積金額")
+        self.assertContains(response, "要再計算")
+        self.assertContains(response, "積算が作成できませんでした。PDF読取から再計算できます。")
+        self.assertContains(response, f'action="{reverse("project_recalculate", args=[failed.pk])}"')
+        self.assertContains(response, "結果を見る")
+
     def test_signup_creates_general_user_and_logs_in(self):
         response = self.client.post(
             reverse("signup"),
@@ -149,6 +172,21 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertIn("inline", response["Content-Disposition"])
+
+    def test_project_detail_shows_recalculate_button_when_estimate_failed(self):
+        self.client.force_login(self.user)
+        project = Project.objects.create(
+            name="積算失敗案件",
+            uploaded_by=self.user,
+            drawing_pdf="drawings/dummy.pdf",
+        )
+
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+
+        self.assertContains(response, "積算が作成できませんでした。")
+        self.assertContains(response, "再計算")
+        self.assertContains(response, f'action="{reverse("project_recalculate", args=[project.pk])}"')
+        self.assertContains(response, 'form="project-recalculate-form"')
 
     @override_settings(
         SUPABASE_URL="https://example.supabase.co",
