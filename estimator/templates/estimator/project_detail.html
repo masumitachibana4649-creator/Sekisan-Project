@@ -170,14 +170,14 @@
         </span>
         <span class="room-total-cell">{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
         <span class="room-note-cell">{{ room.note|room_note }}</span>
-        <strong class="room-sub-label">面積（m2）</strong>
+        <strong class="room-sub-label">面積(m2)</strong>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_east_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.east_surface_area_m2 }}">{% else %}{{ room.east_surface_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_west_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.west_surface_area_m2 }}">{% else %}{{ room.west_surface_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_south_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.south_surface_area_m2 }}">{% else %}{{ room.south_surface_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_north_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.north_surface_area_m2 }}">{% else %}{{ room.north_surface_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.ceiling_surface_area_m2 }}">{% else %}{{ room.ceiling_surface_area_m2 }}{% endif %}</span>
         <span class="room-total-spacer"></span>
-        <strong class="room-sub-label">開口部（m2）</strong>
+        <strong class="room-sub-label">開口部(m2)</strong>
         <span class="room-measure-cell {% if room.east_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.east_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_east_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.east_opening_area_m2 }}">{% else %}{{ room.east_opening_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell {% if room.west_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.west_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_west_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.west_opening_area_m2 }}">{% else %}{{ room.west_opening_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell {% if room.south_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.south_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_south_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.south_opening_area_m2 }}">{% else %}{{ room.south_opening_area_m2 }}{% endif %}</span>

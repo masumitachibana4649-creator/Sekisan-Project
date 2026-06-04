@@ -580,6 +580,7 @@ textarea { resize: vertical; }
   grid-column: 1 / span 3;
   color: var(--muted);
   font-size: 13px;
+  text-align: right;
 }
 
 .room-measure-cell {

@@ -410,8 +410,8 @@ class WallpaperEstimateTests(TestCase):
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
 
-        self.assertContains(response, "面積（m2）")
-        self.assertContains(response, "開口部（m2）")
+        self.assertContains(response, "面積(m2)")
+        self.assertContains(response, "開口部(m2)")
 
     def test_project_admin_total_columns_have_japanese_labels(self):
         project_admin = ProjectAdmin(Project, AdminSite())
