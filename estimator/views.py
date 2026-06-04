@@ -225,7 +225,12 @@ def project_save_wallpapers(request, pk):
         target_room.sync_totals_from_surface_measurements()
         target_room.save()
 
-    _create_manual_rooms_from_post(request.POST, target_project, default_wallpaper=Wallpaper.objects.get(number="001"))
+    _create_manual_rooms_from_post(
+        request.POST,
+        target_project,
+        default_wallpaper=Wallpaper.objects.get(number="001"),
+        wallpaper_map=wallpaper_map,
+    )
 
     if apply_changes:
         messages.success(request, "編集内容を積算に反映しました。")
@@ -396,6 +401,7 @@ def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None,
                 ROOM_SOURCE_AI_MISSING,
                 "抽出失敗: 面積、開口部を入力してください",
                 default_wallpaper,
+                surface_wallpapers=surface_wallpapers,
             )
 
 
@@ -426,7 +432,7 @@ def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpa
     created.save()
 
 
-def _create_empty_room(project, name, source_type, note, default_wallpaper):
+def _create_empty_room(project, name, source_type, note, default_wallpaper, surface_wallpapers=None):
     room = Room(
         project=project,
         name=name,
@@ -437,7 +443,11 @@ def _create_empty_room(project, name, source_type, note, default_wallpaper):
         ceiling_area_m2=Decimal("0"),
         note=note,
     )
-    room.apply_wallpaper_to_all_surfaces(default_wallpaper)
+    if surface_wallpapers:
+        for field, _label, _surface_type in SURFACE_FIELDS:
+            room.apply_wallpaper(field, surface_wallpapers.get(field, default_wallpaper))
+    else:
+        room.apply_wallpaper_to_all_surfaces(default_wallpaper)
     room.set_default_surface_measurements()
     room.save()
     return room
@@ -468,23 +478,43 @@ def _floor_label_from_text(value):
     return ""
 
 
-def _create_manual_rooms_from_post(post_data, project, default_wallpaper):
+def _create_manual_rooms_from_post(post_data, project, default_wallpaper, wallpaper_map=None):
+    wallpaper_map = wallpaper_map or {wallpaper.number: wallpaper for wallpaper in Wallpaper.objects.all()}
     floors = post_data.getlist("new_room_floor")
     names = post_data.getlist("new_room_name")
-    for floor, name in zip(floors, names):
+    for index, (floor, name) in enumerate(zip(floors, names)):
         floor = floor if floor in {"1F", "2F", "3F"} else "1F"
         room_name = str(name or "").strip()
         if not room_name:
             continue
         if not _floor_label_from_text(room_name):
             room_name = f"{floor} {room_name}"
-        _create_empty_room(
+        room = _create_empty_room(
             project,
             room_name,
             ROOM_SOURCE_MANUAL,
             "手動追加: 面積、開口部を入力してください",
             default_wallpaper,
         )
+        room.excluded_from_summary = _at(post_data.getlist("new_room_excluded_from_summary"), index) == "1"
+        for field, _label, surface_type in SURFACE_FIELDS:
+            selected_no = _at(post_data.getlist(f"new_room_{field}_wallpaper_no"), index)
+            wallpaper = wallpaper_map.get(selected_no)
+            if wallpaper:
+                room.apply_wallpaper(field, wallpaper)
+            setattr(
+                room,
+                f"{field}_surface_area_m2",
+                _decimal(_at(post_data.getlist(f"new_room_{field}_surface_area_m2"), index), Decimal("0")),
+            )
+            if surface_type == "wall":
+                setattr(
+                    room,
+                    f"{field}_opening_area_m2",
+                    _decimal(_at(post_data.getlist(f"new_room_{field}_opening_area_m2"), index), Decimal("0")),
+                )
+        room.sync_totals_from_surface_measurements()
+        room.save()
 
 
 def _wall_surface_value(wall_surfaces, field):

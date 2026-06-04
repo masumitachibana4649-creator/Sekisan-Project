@@ -77,53 +77,56 @@ if (openAddRoomButton && addRoomDialog && confirmAddRoomButton && newRoomFloor &
     }
 
     const floor = newRoomFloor.value || "1F";
-    appendHiddenRoomField("new_room_floor", floor);
-    appendHiddenRoomField("new_room_name", roomName);
     appendManualRoomPreview(floor, roomName);
     addRoomDialog.close();
   });
-}
-
-function appendHiddenRoomField(name, value) {
-  const input = document.createElement("input");
-  input.type = "hidden";
-  input.name = name;
-  input.value = value;
-  newRoomFields.append(input);
 }
 
 function appendManualRoomPreview(floor, roomName) {
   const row = document.createElement("div");
   row.className = "room-detail-group";
   const rowNumber = roomDetailBody.querySelectorAll(".room-detail-group").length + 1;
+  const wallpaperOptions = wallpaperOptionsHtml("001");
   row.innerHTML = `
     <strong class="room-no-cell">${rowNumber}</strong>
-    <span class="room-floor-cell">${escapeHtml(floor)}</span>
-    <strong class="room-name-cell source-manual-room">${escapeHtml(roomName)}</strong>
-    <span class="room-wallpaper-cell">001：標準壁紙</span>
-    <span class="room-wallpaper-cell">001：標準壁紙</span>
-    <span class="room-wallpaper-cell">001：標準壁紙</span>
-    <span class="room-wallpaper-cell">001：標準壁紙</span>
-    <span class="room-wallpaper-cell">001：標準壁紙</span>
+    <span class="room-floor-cell">
+      <select name="new_room_floor">
+        <option value="1F" ${floor === "1F" ? "selected" : ""}>1F</option>
+        <option value="2F" ${floor === "2F" ? "selected" : ""}>2F</option>
+        <option value="3F" ${floor === "3F" ? "selected" : ""}>3F</option>
+      </select>
+    </span>
+    <strong class="room-name-cell source-manual-room"><input name="new_room_name" value="${escapeAttribute(roomName)}"></strong>
+    <span class="room-wallpaper-cell"><select class="room-wallpaper-select" name="new_room_east_wallpaper_no">${wallpaperOptions}</select></span>
+    <span class="room-wallpaper-cell"><select class="room-wallpaper-select" name="new_room_west_wallpaper_no">${wallpaperOptions}</select></span>
+    <span class="room-wallpaper-cell"><select class="room-wallpaper-select" name="new_room_south_wallpaper_no">${wallpaperOptions}</select></span>
+    <span class="room-wallpaper-cell"><select class="room-wallpaper-select" name="new_room_north_wallpaper_no">${wallpaperOptions}</select></span>
+    <span class="room-wallpaper-cell"><select class="room-wallpaper-select" name="new_room_ceiling_wallpaper_no">${wallpaperOptions}</select></span>
     <span class="room-total-cell">0.00 m2<br>0 本</span>
     <span class="room-note-cell">手動追加: 面積、開口部を入力してください</span>
-    <label class="room-exclude-cell"><input type="checkbox" disabled><span>集計対象外</span></label>
+    <label class="room-exclude-cell">
+      <input type="hidden" name="new_room_excluded_from_summary" value="0">
+      <input class="room-exclude-checkbox" type="checkbox" value="1" data-new-room-exclude>
+      <span>集計対象外</span>
+    </label>
     <strong class="room-sub-label">面積(m2)</strong>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
+    <span class="room-measure-cell"><input name="new_room_east_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_west_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_south_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_north_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
     <span class="room-total-spacer"></span>
     <strong class="room-sub-label">開口部(m2)</strong>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
-    <span class="room-measure-cell">0.00</span>
+    <span class="room-measure-cell"><input name="new_room_east_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_west_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_south_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell"><input name="new_room_north_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
     <span class="room-measure-cell"></span>
     <span class="room-total-spacer"></span>
   `;
   roomDetailBody.append(row);
+  const firstInput = row.querySelector('input[name="new_room_name"]');
+  if (firstInput) firstInput.focus();
 }
 
 function escapeHtml(value) {
@@ -135,3 +138,31 @@ function escapeHtml(value) {
     "'": "&#039;",
   }[character]));
 }
+
+function escapeAttribute(value) {
+  return escapeHtml(value).replace(/`/g, "&#096;");
+}
+
+function wallpaperOptionsHtml(selectedNumber) {
+  const source = document.querySelector(".room-wallpaper-select");
+  if (!source) {
+    return '<option value="001" selected>001：標準壁紙</option>';
+  }
+  return Array.from(source.options).map((option) => {
+    const selected = option.value === selectedNumber ? " selected" : "";
+    return `<option value="${escapeAttribute(option.value)}"${selected}>${escapeHtml(option.textContent)}</option>`;
+  }).join("");
+}
+
+document.addEventListener("change", (event) => {
+  const checkbox = event.target.closest(".room-exclude-checkbox");
+  if (!checkbox) return;
+
+  const row = checkbox.closest(".room-detail-group");
+  if (row) row.classList.toggle("is-summary-excluded", checkbox.checked);
+
+  if (checkbox.dataset.newRoomExclude !== undefined) {
+    const hidden = checkbox.parentElement.querySelector('input[type="hidden"][name="new_room_excluded_from_summary"]');
+    if (hidden) hidden.value = checkbox.checked ? "1" : "0";
+  }
+});

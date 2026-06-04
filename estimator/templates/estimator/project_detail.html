@@ -177,7 +177,7 @@
         <span class="room-total-cell">{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
         <span class="room-note-cell">{{ room.note|room_note }}</span>
         <label class="room-exclude-cell">
-          <input type="checkbox" name="room_{{ room.pk }}_excluded_from_summary" value="1" {% if room.excluded_from_summary %}checked{% endif %} {% if not edit_mode %}disabled{% endif %}>
+          <input class="room-exclude-checkbox" type="checkbox" name="room_{{ room.pk }}_excluded_from_summary" value="1" {% if room.excluded_from_summary %}checked{% endif %} {% if not edit_mode %}disabled{% endif %}>
           <span>集計対象外</span>
         </label>
         <strong class="room-sub-label">面積(m2)</strong>

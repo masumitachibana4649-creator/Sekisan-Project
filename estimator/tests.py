@@ -560,6 +560,43 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "source-missing-room")
         self.assertContains(response, "赤文字は抽出に失敗した部屋なので編集画面で面積、開口部を入力してください")
 
+    def test_pdf_missing_room_candidates_use_selected_surface_wallpapers(self):
+        self.client.force_login(self.user)
+        Wallpaper.ensure_defaults()
+        accent = Wallpaper.objects.create(
+            display_order="002",
+            number="002",
+            name="アクセント",
+            roll_width_m=Decimal("0.92"),
+            roll_length_m=Decimal("10"),
+            loss_rate_percent=Decimal("8"),
+            unit_price_per_roll=5000,
+        )
+        from .views import _create_rooms_from_analysis
+
+        project = Project.objects.create(name="不足候補壁紙案件", uploaded_by=self.user)
+        standard = Wallpaper.objects.get(number="001")
+        _create_rooms_from_analysis(
+            project,
+            [AnalyzedRoom("1F LDK", Decimal("18"), Decimal("2.4"), Decimal("0"), Decimal("20"), "PDF読取")],
+            default_wallpaper=standard,
+            surface_wallpapers={
+                "east": accent,
+                "west": standard,
+                "south": standard,
+                "north": standard,
+                "ceiling": accent,
+            },
+            missing_rooms=["1F 収納"],
+        )
+
+        missing_room = project.rooms.get(name="1F 収納")
+        self.assertEqual(missing_room.source_type, "ai_missing")
+        self.assertEqual(missing_room.east_wallpaper_no, "002")
+        self.assertEqual(missing_room.east_wallpaper_name, "アクセント")
+        self.assertEqual(missing_room.west_wallpaper_no, "001")
+        self.assertEqual(missing_room.ceiling_wallpaper_no, "002")
+
     def test_manual_room_add_post_creates_green_zero_room(self):
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
@@ -579,12 +616,26 @@ class WallpaperEstimateTests(TestCase):
                 "apply_changes": "1",
                 "new_room_floor": ["2F"],
                 "new_room_name": ["納戸"],
+                "new_room_excluded_from_summary": ["1"],
+                "new_room_east_surface_area_m2": ["3.50"],
+                "new_room_west_surface_area_m2": ["4.50"],
+                "new_room_south_surface_area_m2": ["5.50"],
+                "new_room_north_surface_area_m2": ["6.50"],
+                "new_room_ceiling_surface_area_m2": ["7.50"],
+                "new_room_east_opening_area_m2": ["0.10"],
+                "new_room_west_opening_area_m2": ["0.20"],
+                "new_room_south_opening_area_m2": ["0.30"],
+                "new_room_north_opening_area_m2": ["0.40"],
             },
         )
 
         self.assertRedirects(response, f"{reverse('project_detail', args=[project.pk])}?edit=1")
         added = project.rooms.get(name="2F 納戸")
         self.assertEqual(added.source_type, "manual")
+        self.assertTrue(added.excluded_from_summary)
+        self.assertEqual(added.east_surface_area_m2, Decimal("3.50"))
+        self.assertEqual(added.ceiling_surface_area_m2, Decimal("7.50"))
+        self.assertEqual(added.opening_area_m2, Decimal("1.00"))
         self.assertEqual(added.total_area, Decimal("0"))
         response = self.client.get(f"{reverse('project_detail', args=[project.pk])}?edit=1")
         self.assertContains(response, "source-manual-room")

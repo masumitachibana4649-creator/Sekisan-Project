@@ -751,6 +751,11 @@ textarea { resize: vertical; }
   color: #087443;
 }
 
+.source-manual-room input {
+  color: #087443;
+  font-weight: 900;
+}
+
 .estimate-note {
   margin: 0 0 18px;
   font-weight: 800;
