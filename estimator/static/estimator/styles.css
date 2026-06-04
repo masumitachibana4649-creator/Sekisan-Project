@@ -517,8 +517,9 @@ textarea { resize: vertical; }
 .result-row,
 .room-detail-group {
   display: grid;
-  grid-template-columns: 48px 48px minmax(160px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
-  gap: 10px;
+  grid-template-columns: max-content max-content minmax(4em, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
+  column-gap: 1em;
+  row-gap: 10px;
   min-width: 1720px;
   align-items: start;
 }
