@@ -498,7 +498,7 @@ textarea { resize: vertical; }
 }
 
 .result-body {
-  min-width: 1580px;
+  min-width: 1720px;
   max-height: 560px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -517,9 +517,9 @@ textarea { resize: vertical; }
 .result-row,
 .room-detail-group {
   display: grid;
-  grid-template-columns: minmax(130px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
+  grid-template-columns: minmax(48px, 0.35fr) minmax(64px, 0.45fr) minmax(140px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
   gap: 10px;
-  min-width: 1580px;
+  min-width: 1720px;
   align-items: start;
 }
 
@@ -536,10 +536,10 @@ textarea { resize: vertical; }
   top: 0;
   z-index: 1;
   background: var(--panel);
-  min-width: 1580px;
+  min-width: 1720px;
 }
 
-.result-head span:nth-child(n+2):not(:last-child) {
+.result-head span:nth-child(n+4):not(:last-child) {
   text-align: right;
 }
 
@@ -565,9 +565,23 @@ textarea { resize: vertical; }
   text-align: right;
 }
 
+.room-no-cell,
+.room-floor-cell {
+  text-align: right;
+}
+
+.room-name-cell {
+  overflow-wrap: anywhere;
+}
+
 .room-sub-label {
+  grid-column: 1 / span 3;
   color: var(--muted);
   font-size: 13px;
+}
+
+.room-measure-cell {
+  text-align: right;
 }
 
 .room-detail-group input {
@@ -576,19 +590,19 @@ textarea { resize: vertical; }
 }
 
 .room-note-cell {
-  grid-column: 8;
+  grid-column: 10;
   grid-row: 1 / span 3;
   line-height: 1.55;
 }
 
 .room-total-cell {
-  grid-column: 7;
+  grid-column: 9;
   grid-row: 1;
   text-align: right;
 }
 
 .result-row span:nth-child(n+2):not(:last-child),
-.room-detail-group > span:not(.room-wallpaper-cell):not(.room-note-cell),
+.room-total-spacer,
 .wallpaper-summary-row span {
   text-align: right;
 }

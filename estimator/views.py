@@ -306,6 +306,8 @@ def project_csv(request, pk):
     writer.writerow([])
     writer.writerow(["部屋別明細"])
     writer.writerow([
+        "No.",
+        "階",
         "部屋名",
         "周長(m)",
         "天井高(m)",
@@ -320,9 +322,11 @@ def project_csv(request, pk):
         "部屋別積上方式ロール本数",
         "備考",
     ])
-    for room in project.rooms.all():
+    for index, room in enumerate(project.rooms.all(), start=1):
         writer.writerow([
-            room.display_name,
+            index,
+            room.display_floor_label,
+            room.display_room_name,
             room.perimeter_m,
             room.height_m,
             room.opening_area_m2,

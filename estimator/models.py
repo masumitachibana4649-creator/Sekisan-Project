@@ -364,14 +364,28 @@ class Room(models.Model):
 
     @property
     def display_name(self):
+        floor = self.display_floor_label
+        room_name = self.display_room_name
+        if floor:
+            return f"{floor} {room_name}".strip()
+        return room_name
+
+    @property
+    def display_floor_label(self):
+        name = str(self.name or "").strip()
+        if self._is_multi_floor_room(name):
+            return ""
+
+        return self._inferred_floor_label()
+
+    @property
+    def display_room_name(self):
         name = str(self.name or "").strip()
         if self._is_multi_floor_room(name):
             return name
 
-        floor = self._inferred_floor_label()
-        if floor:
-            name_without_floor = self._remove_floor_labels(name)
-            return f"{floor} {name_without_floor}".strip()
+        if self.display_floor_label:
+            return self._remove_floor_labels(name) or name
         return name
 
     def _inferred_floor_label(self):

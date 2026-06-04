@@ -242,7 +242,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, ">再計算</button>")
         self.assertNotContains(response, 'href="' + reverse("project_detail", args=[project.pk]) + '?edit=1"')
 
-    def test_room_display_name_includes_floor_in_detail_and_csv(self):
+    def test_room_columns_split_number_floor_and_name_in_detail_and_csv(self):
         self.client.force_login(self.user)
         project = Project.objects.create(name="階表示案件", uploaded_by=self.user)
         Room.objects.create(
@@ -256,10 +256,14 @@ class WallpaperEstimateTests(TestCase):
         )
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
-        self.assertContains(response, "1. 1F トイレ")
+        self.assertContains(response, "<span>No.</span><span>階</span><span>部屋名</span>", html=True)
+        self.assertContains(response, '<strong class="room-no-cell">1</strong>', html=True)
+        self.assertContains(response, '<span class="room-floor-cell">1F</span>', html=True)
+        self.assertContains(response, '<strong class="room-name-cell">トイレ</strong>', html=True)
 
         response = self.client.get(reverse("project_csv", args=[project.pk]))
-        self.assertContains(response, "1F トイレ")
+        self.assertContains(response, "No.,階,部屋名")
+        self.assertContains(response, "1,1F,トイレ")
 
     def test_room_display_name_normalizes_floor_without_duplicates(self):
         project = Project.objects.create(name="階重複案件", uploaded_by=self.user)
@@ -282,7 +286,11 @@ class WallpaperEstimateTests(TestCase):
         )
 
         self.assertEqual(room.display_name, "1F トイレ")
+        self.assertEqual(room.display_floor_label, "1F")
+        self.assertEqual(room.display_room_name, "トイレ")
         self.assertEqual(atrium.display_name, "吹抜")
+        self.assertEqual(atrium.display_floor_label, "")
+        self.assertEqual(atrium.display_room_name, "吹抜")
 
     def test_estimated_openings_are_blue_in_display_mode(self):
         self.client.force_login(self.user)
@@ -301,7 +309,7 @@ class WallpaperEstimateTests(TestCase):
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
 
-        self.assertContains(response, 'class="estimated-value">1')
+        self.assertContains(response, 'class="room-measure-cell estimated-value">1')
 
     @override_settings(
         SUPABASE_URL="https://example.supabase.co",
