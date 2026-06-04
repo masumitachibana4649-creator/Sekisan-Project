@@ -42,6 +42,8 @@ PAGE_LABELS = {
 }
 
 PLAN_PAGE_KEYS = ("page_1f_plan", "page_2f_plan", "page_3f_plan")
+CEILING_PLAN_PAGE_KEYS = ("page_1f_ceiling_plan", "page_2f_ceiling_plan", "page_3f_ceiling_plan")
+ROOM_CANDIDATE_PAGE_KEYS = PLAN_PAGE_KEYS + CEILING_PLAN_PAGE_KEYS
 NON_WALLPAPER_ROOM_LABELS = ("浴室", "バルコニー")
 ROOM_LABEL_PATTERNS = {
     "和室": ("和室",),
@@ -63,8 +65,8 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
     if not parsed_pages.get("page_1f_plan") and not parsed_pages.get("page_2f_plan") and not parsed_pages.get("page_3f_plan"):
         raise ValueError("平面図のページが指定されていません。")
 
-    plan_text = _plan_page_text(pdf_path, parsed_pages)
-    expected_counts = _expected_room_counts(plan_text) if plan_text else {}
+    room_candidate_text = _room_candidate_page_text(pdf_path, parsed_pages)
+    expected_counts = _expected_room_counts(room_candidate_text) if room_candidate_text else {}
 
     ai_result = _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=expected_counts)
     rooms = ai_result["rooms"]
@@ -72,7 +74,13 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
     missing_rooms = ai_result.get("missing_rooms", [])
-    validation_warnings = _validate_room_extraction(pdf_path, parsed_pages, rooms, plan_text=plan_text, expected_counts=expected_counts)
+    validation_warnings = _validate_room_extraction(
+        pdf_path,
+        parsed_pages,
+        rooms,
+        room_candidate_text=room_candidate_text,
+        expected_counts=expected_counts,
+    )
 
     page_summary = "、".join(
         f"{PAGE_LABELS[key]}={value}P" for key, value in parsed_pages.items() if value is not None
@@ -234,7 +242,7 @@ def _analysis_prompt(parsed_pages, expected_counts=None):
 
 {page_lines}
 
-平面図テキストから検出した室名候補:
+平面図・天井伏図テキストから検出した室名候補:
 {expected_room_lines}
 
 抽出対象:
@@ -253,7 +261,7 @@ def _analysis_prompt(parsed_pages, expected_counts=None):
 - 天井高が部屋ごとに読めない場合は、図面内の標準天井高を使ってください。
 - 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
 - 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
-- 上記の室名候補は抽出漏れチェックに使います。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
+- 上記の室名候補は抽出漏れチェックに使います。平面図を部屋一覧の正とし、天井伏図の室名候補も補助根拠として確認してください。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
 - roomsに入れるだけの面積・開口部情報をどうしても抽出できない室名候補は、missing_rooms に「階 部屋名」の形式で入れてください。missing_roomsにはroomsに入れた部屋名を重複して入れないでください。
 - missing_rooms は浴室・バルコニー・屋外部分を除外し、クロス施工対象だが面積入力が必要な部屋だけにしてください。
 - 和室、台所、食堂、便所、物入、押入、納戸、子供室、寝室など旧来表記の部屋名も通常のクロス施工対象として扱ってください。
@@ -416,12 +424,14 @@ def _wall_surfaces_from_ai(value):
     return surfaces
 
 
-def _validate_room_extraction(pdf_path, parsed_pages, rooms, plan_text=None, expected_counts=None):
-    plan_text = plan_text if plan_text is not None else _plan_page_text(pdf_path, parsed_pages)
-    if not plan_text:
+def _validate_room_extraction(pdf_path, parsed_pages, rooms, room_candidate_text=None, expected_counts=None):
+    room_candidate_text = (
+        room_candidate_text if room_candidate_text is not None else _room_candidate_page_text(pdf_path, parsed_pages)
+    )
+    if not room_candidate_text:
         return []
 
-    expected_counts = expected_counts if expected_counts is not None else _expected_room_counts(plan_text)
+    expected_counts = expected_counts if expected_counts is not None else _expected_room_counts(room_candidate_text)
     if not expected_counts:
         return []
 
@@ -462,12 +472,20 @@ def _missing_only_secondary_spaces(missing):
 
 
 def _plan_page_text(pdf_path, parsed_pages):
+    return _page_text_for_keys(pdf_path, parsed_pages, PLAN_PAGE_KEYS)
+
+
+def _room_candidate_page_text(pdf_path, parsed_pages):
+    return _page_text_for_keys(pdf_path, parsed_pages, ROOM_CANDIDATE_PAGE_KEYS)
+
+
+def _page_text_for_keys(pdf_path, parsed_pages, page_keys):
     try:
         from pypdf import PdfReader
 
         reader = PdfReader(str(pdf_path))
         texts = []
-        for key in PLAN_PAGE_KEYS:
+        for key in page_keys:
             page_number = parsed_pages.get(key)
             if not page_number:
                 continue

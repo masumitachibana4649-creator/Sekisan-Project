@@ -20,6 +20,7 @@ from .pdf_analysis import (
     _analysis_prompt,
     _expected_room_counts,
     _parse_ai_analysis_response,
+    _room_candidate_page_text,
     _sample_plan_rooms,
     _write_selected_pages_pdf,
 )
@@ -813,6 +814,34 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(counts["洋室"], 2)
         self.assertEqual(counts["廊下"], 1)
 
+    def test_room_candidate_text_includes_ceiling_plan_pages(self):
+        class FakePage:
+            def __init__(self, text):
+                self.text = text
+
+            def extract_text(self):
+                return self.text
+
+        class FakeReader:
+            pages = [
+                FakePage("1F平面図 LDK"),
+                FakePage("1F天井伏図 洗面所"),
+                FakePage("展開図"),
+            ]
+
+            def __init__(self, _path):
+                pass
+
+        with patch("pypdf.PdfReader", FakeReader):
+            text = _room_candidate_page_text(
+                "dummy.pdf",
+                {"page_1f_plan": 1, "page_1f_ceiling_plan": 2, "page_development_start": 3},
+            )
+
+        self.assertIn("LDK", text)
+        self.assertIn("洗面所", text)
+        self.assertNotIn("展開図", text)
+
     def test_analysis_prompt_keeps_rooms_when_development_drawings_are_incomplete(self):
         prompt = _analysis_prompt(
             {
@@ -883,7 +912,7 @@ class WallpaperEstimateTests(TestCase):
         with patch("estimator.pdf_analysis._pdf_page_count", return_value=10), patch(
             "estimator.pdf_analysis._extract_rooms_with_ai",
             return_value=extracted_rooms,
-        ), patch("estimator.pdf_analysis._plan_page_text", return_value=plan_text):
+        ), patch("estimator.pdf_analysis._room_candidate_page_text", return_value=plan_text):
             result = analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "5", "page_2f_plan": "6"})
 
         self.assertEqual(len(result.rooms), 2)
@@ -937,7 +966,7 @@ class WallpaperEstimateTests(TestCase):
         with patch("estimator.pdf_analysis._pdf_page_count", return_value=12), patch(
             "estimator.pdf_analysis._extract_rooms_with_ai",
             return_value=extracted_rooms,
-        ), patch("estimator.pdf_analysis._plan_page_text", return_value=plan_text):
+        ), patch("estimator.pdf_analysis._room_candidate_page_text", return_value=plan_text):
             result = analyze_wallpaper_pdf("dummy.pdf", {"page_1f_plan": "9", "page_2f_plan": "10"})
 
         self.assertEqual(len(result.rooms), 4)
