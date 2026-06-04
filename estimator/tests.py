@@ -502,6 +502,94 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.wallpaper_summary["room_total"]["rolls"], 4)
         self.assertEqual(project.total_rolls, 4)
 
+    def test_excluded_room_stays_in_detail_but_is_removed_from_summary(self):
+        self.client.force_login(self.user)
+        project = Project.objects.create(name="対象外テスト", uploaded_by=self.user)
+        Room.objects.create(
+            project=project,
+            name="1F LDK",
+            perimeter_m=Decimal("20"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("0"),
+        )
+        Room.objects.create(
+            project=project,
+            name="1F 収納",
+            excluded_from_summary=True,
+            perimeter_m=Decimal("20"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("0"),
+        )
+
+        self.assertEqual(project.rooms.count(), 2)
+        self.assertEqual(project.total_area.quantize(Decimal("0.01")), Decimal("51.84"))
+        self.assertEqual(project.total_rolls, 2)
+
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+        self.assertContains(response, "収納")
+        self.assertContains(response, "is-summary-excluded")
+
+        response = self.client.get(reverse("project_csv", args=[project.pk]))
+        self.assertContains(response, "1F,収納")
+        self.assertContains(response, "対象外")
+
+    def test_pdf_missing_room_candidates_are_added_as_red_zero_rooms(self):
+        self.client.force_login(self.user)
+        Wallpaper.ensure_defaults()
+        project = Project.objects.create(name="不足候補案件", drawing_pdf="drawings/dummy.pdf", uploaded_by=self.user)
+        analysis = PdfAnalysisResult(
+            rooms=[
+                AnalyzedRoom("1F LDK", Decimal("18"), Decimal("2.4"), Decimal("0"), Decimal("20"), "PDF読取"),
+                AnalyzedRoom("2F 洋室", Decimal("12"), Decimal("2.4"), Decimal("0"), Decimal("9"), "PDF読取"),
+            ],
+            memo="PDF AI読取",
+            missing_rooms=["1F 収納", "2F トイレ"],
+        )
+
+        with patch("estimator.views.analyze_wallpaper_pdf", return_value=analysis):
+            response = self.client.post(reverse("project_recalculate", args=[project.pk]))
+
+        self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
+        rooms = list(project.rooms.order_by("id"))
+        self.assertEqual([room.name for room in rooms], ["1F LDK", "1F 収納", "2F 洋室", "2F トイレ"])
+        self.assertEqual(rooms[1].source_type, "ai_missing")
+        self.assertEqual(rooms[1].total_area, Decimal("0"))
+        response = self.client.get(reverse("project_detail", args=[project.pk]))
+        self.assertContains(response, "source-missing-room")
+        self.assertContains(response, "赤文字は抽出に失敗した部屋なので編集画面で面積、開口部を入力してください")
+
+    def test_manual_room_add_post_creates_green_zero_room(self):
+        self.client.force_login(self.user)
+        Wallpaper.ensure_defaults()
+        project = Project.objects.create(name="手動追加案件", uploaded_by=self.user)
+        Room.objects.create(
+            project=project,
+            name="1F LDK",
+            perimeter_m=Decimal("18"),
+            height_m=Decimal("2.4"),
+            opening_area_m2=Decimal("0"),
+            ceiling_area_m2=Decimal("20"),
+        )
+
+        response = self.client.post(
+            reverse("project_save_wallpapers", args=[project.pk]),
+            {
+                "apply_changes": "1",
+                "new_room_floor": ["2F"],
+                "new_room_name": ["納戸"],
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('project_detail', args=[project.pk])}?edit=1")
+        added = project.rooms.get(name="2F 納戸")
+        self.assertEqual(added.source_type, "manual")
+        self.assertEqual(added.total_area, Decimal("0"))
+        response = self.client.get(f"{reverse('project_detail', args=[project.pk])}?edit=1")
+        self.assertContains(response, "source-manual-room")
+        self.assertContains(response, "緑文字は追加した部屋なので編集画面で面積、開口部を入力してください")
+
     def test_project_save_wallpapers_creates_revision_with_selected_method(self):
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()

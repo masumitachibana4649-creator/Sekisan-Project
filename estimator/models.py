@@ -24,6 +24,16 @@ SURFACE_FIELDS = (
     ("ceiling", "天井", "ceiling"),
 )
 
+ROOM_SOURCE_AI = "ai"
+ROOM_SOURCE_AI_MISSING = "ai_missing"
+ROOM_SOURCE_MANUAL = "manual"
+
+ROOM_SOURCE_CHOICES = (
+    (ROOM_SOURCE_AI, "AI読取"),
+    (ROOM_SOURCE_AI_MISSING, "抽出失敗"),
+    (ROOM_SOURCE_MANUAL, "手動追加"),
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -209,6 +219,9 @@ class Project(models.Model):
         room_rolls = {}
         for room in rooms:
             room_groups = {}
+            if room.excluded_from_summary:
+                room_rolls[room.pk] = []
+                continue
             for item in room.wallpaper_surface_items():
                 if item["wallpaper_no"] == "000":
                     continue
@@ -309,6 +322,8 @@ class EstimateDefaultSettings(models.Model):
 class Room(models.Model):
     project = models.ForeignKey(Project, related_name="rooms", on_delete=models.CASCADE)
     name = models.CharField("部屋名", max_length=80)
+    source_type = models.CharField("部屋追加区分", max_length=16, choices=ROOM_SOURCE_CHOICES, default=ROOM_SOURCE_AI)
+    excluded_from_summary = models.BooleanField("集計対象外", default=False)
     perimeter_m = models.DecimalField("周長(m)", max_digits=7, decimal_places=2)
     height_m = models.DecimalField("天井高(m)", max_digits=5, decimal_places=2, default=Decimal("2.4"))
     opening_area_m2 = models.DecimalField("開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
@@ -457,14 +472,20 @@ class Room(models.Model):
 
     @property
     def wallpaper_area(self):
+        if self.excluded_from_summary:
+            return Decimal("0")
         return sum((item["base_area"] for item in self.wallpaper_surface_items() if item["wallpaper_no"] != "000"), Decimal("0"))
 
     @property
     def total_area(self):
+        if self.excluded_from_summary:
+            return Decimal("0")
         return sum((item["required_area"] for item in self.wallpaper_surface_items() if item["wallpaper_no"] != "000"), Decimal("0"))
 
     @property
     def rolls_required(self):
+        if self.excluded_from_summary:
+            return 0
         groups = {}
         for item in self.wallpaper_surface_items():
             if item["wallpaper_no"] == "000":

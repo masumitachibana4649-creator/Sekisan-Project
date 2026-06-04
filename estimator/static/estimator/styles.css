@@ -598,6 +598,21 @@ textarea { resize: vertical; }
   line-height: 1.55;
 }
 
+.room-exclude-cell {
+  display: inline-flex;
+  grid-column: 1 / span 3;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.room-exclude-cell input {
+  width: auto;
+  min-height: auto;
+}
+
 .room-total-cell {
   grid-column: 9;
   grid-row: 1;
@@ -612,6 +627,10 @@ textarea { resize: vertical; }
 
 .result-table .room-detail-group:nth-of-type(odd) {
   background: #eef8fb;
+}
+
+.result-table .room-detail-group.is-summary-excluded {
+  background: #e5e7eb;
 }
 
 .result-hero {
@@ -722,6 +741,16 @@ textarea { resize: vertical; }
   color: #1565c0;
 }
 
+.source-missing-note,
+.source-missing-room {
+  color: #b42318;
+}
+
+.source-manual-note,
+.source-manual-room {
+  color: #087443;
+}
+
 .estimate-note {
   margin: 0 0 18px;
   font-weight: 800;
@@ -738,6 +767,50 @@ textarea { resize: vertical; }
 
 .empty-result span {
   color: #b42318;
+}
+
+.room-add-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 14px;
+}
+
+.room-add-dialog {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--ink);
+}
+
+.room-add-dialog::backdrop {
+  background: rgb(20 25 28 / 42%);
+}
+
+.room-add-dialog-body {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.room-add-dialog h3 {
+  margin: 0;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.form-error {
+  margin: 0;
+  color: #b42318;
+  font-weight: 800;
+}
+
+.is-hidden {
+  display: none !important;
 }
 
 .page-map-summary {

@@ -27,6 +27,7 @@ class AnalyzedRoom:
 class PdfAnalysisResult:
     rooms: list[AnalyzedRoom]
     memo: str
+    missing_rooms: list[str] | None = None
 
 
 PAGE_LABELS = {
@@ -70,6 +71,7 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
     if not rooms:
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
+    missing_rooms = ai_result.get("missing_rooms", [])
     validation_warnings = _validate_room_extraction(pdf_path, parsed_pages, rooms, plan_text=plan_text, expected_counts=expected_counts)
 
     page_summary = "、".join(
@@ -84,6 +86,7 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
             "部屋名・周長・天井高・開口部面積・天井面積をAIで抽出し、"
             f"壁紙量とロール本数はシステムの計算式で算出。{warning_text}"
         ),
+        missing_rooms=missing_rooms,
     )
 
 
@@ -251,6 +254,8 @@ def _analysis_prompt(parsed_pages, expected_counts=None):
 - 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
 - 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
 - 上記の室名候補は抽出漏れチェックに使います。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
+- roomsに入れるだけの面積・開口部情報をどうしても抽出できない室名候補は、missing_rooms に「階 部屋名」の形式で入れてください。missing_roomsにはroomsに入れた部屋名を重複して入れないでください。
+- missing_rooms は浴室・バルコニー・屋外部分を除外し、クロス施工対象だが面積入力が必要な部屋だけにしてください。
 - 和室、台所、食堂、便所、物入、押入、納戸、子供室、寝室など旧来表記の部屋名も通常のクロス施工対象として扱ってください。
 - 同じ室名が複数ある場合は統合せず、位置や階で区別してください。例: 洋室が3つ見える場合は3行、収納が複数見える場合は「収納 一式」または個別行として漏れなく含めてください。
 - 廊下、階段、玄関、トイレ、洗面所、収納、物入もクロス施工対象として含めてください。
@@ -334,9 +339,10 @@ def _analysis_schema():
         "type": "object",
         "properties": {
             "rooms": {"type": "array", "items": room_schema},
+            "missing_rooms": {"type": "array", "items": {"type": "string"}},
             "warnings": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["rooms", "warnings"],
+        "required": ["rooms", "missing_rooms", "warnings"],
         "additionalProperties": False,
     }
 
@@ -385,8 +391,9 @@ def _parse_ai_analysis_response(response_text):
             )
         )
 
+    missing_rooms = [str(room_name).strip() for room_name in payload.get("missing_rooms", []) if str(room_name).strip()]
     warnings = [str(warning).strip() for warning in payload.get("warnings", []) if str(warning).strip()]
-    return {"rooms": rooms, "warnings": warnings}
+    return {"rooms": rooms, "missing_rooms": missing_rooms, "warnings": warnings}
 
 
 def _wall_surfaces_from_ai(value):

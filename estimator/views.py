@@ -1,5 +1,6 @@
 import csv
 import logging
+import re
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -20,6 +21,9 @@ from django.urls import reverse
 
 from .models import (
     ESTIMATE_METHOD_CHOICES,
+    ROOM_SOURCE_AI,
+    ROOM_SOURCE_AI_MISSING,
+    ROOM_SOURCE_MANUAL,
     ROOM_TOTAL_METHOD,
     SURFACE_FIELDS,
     WALLPAPER_TOTAL_METHOD,
@@ -141,6 +145,8 @@ def project_detail(request, pk):
     project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     rooms = project.rooms.all()
     has_estimated_openings = any(_is_estimated_opening(room) for room in rooms)
+    has_ai_missing_rooms = any(room.source_type == ROOM_SOURCE_AI_MISSING for room in rooms)
+    has_manual_rooms = any(room.source_type == ROOM_SOURCE_MANUAL for room in rooms)
     summary = project.wallpaper_summary
     edit_mode = request.GET.get("edit") == "1"
     return render(
@@ -155,6 +161,8 @@ def project_detail(request, pk):
             "summary": summary,
             "suggested_project_name": _suggested_revision_name(project.name),
             "has_estimated_openings": has_estimated_openings,
+            "has_ai_missing_rooms": has_ai_missing_rooms,
+            "has_manual_rooms": has_manual_rooms,
             "edit_mode": edit_mode,
         },
     )
@@ -194,6 +202,7 @@ def project_save_wallpapers(request, pk):
 
     wallpaper_map = {wallpaper.number: wallpaper for wallpaper in Wallpaper.objects.all()}
     for source_room_id, target_room in room_map.items():
+        target_room.excluded_from_summary = request.POST.get(f"room_{source_room_id}_excluded_from_summary") == "1"
         for field, _label, _surface_type in SURFACE_FIELDS:
             selected_no = request.POST.get(
                 f"room_{source_room_id}_{field}_wallpaper_no",
@@ -215,6 +224,8 @@ def project_save_wallpapers(request, pk):
                 )
         target_room.sync_totals_from_surface_measurements()
         target_room.save()
+
+    _create_manual_rooms_from_post(request.POST, target_project, default_wallpaper=Wallpaper.objects.get(number="001"))
 
     if apply_changes:
         messages.success(request, "編集内容を積算に反映しました。")
@@ -318,6 +329,7 @@ def project_csv(request, pk):
         "3面壁紙",
         "4面壁紙",
         "天井壁紙",
+        "集計対象外",
         "必要面積(m2)",
         "部屋別積上方式ロール本数",
         "備考",
@@ -336,6 +348,7 @@ def project_csv(request, pk):
             f"{room.south_wallpaper_no}：{room.south_wallpaper_name}",
             f"{room.north_wallpaper_no}：{room.north_wallpaper_name}",
             f"{room.ceiling_wallpaper_no}：{room.ceiling_wallpaper_name}",
+            "対象外" if room.excluded_from_summary else "",
             _round(room.total_area),
             room.rolls_required,
             room.note,
@@ -364,33 +377,114 @@ def _raise_forbidden():
     raise PermissionDenied("この積算データを表示する権限がありません。")
 
 
-def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None, surface_wallpapers=None):
+def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None, surface_wallpapers=None, missing_rooms=None):
     default_wallpaper = default_wallpaper or Wallpaper.objects.get(number="001")
     surface_wallpapers = surface_wallpapers or {field: default_wallpaper for field, _label, _type in SURFACE_FIELDS}
-    for room in analyzed_rooms:
-        created = Room(
-            project=project,
-            name=room.name,
-            perimeter_m=room.perimeter_m,
-            height_m=room.height_m,
-            opening_area_m2=room.opening_area_m2,
-            ceiling_area_m2=room.ceiling_area_m2,
-            note=room.note,
+    missing_rooms = _missing_room_names(missing_rooms or [], analyzed_rooms)
+    floor_order = ("1F", "2F", "3F", "")
+    for floor in floor_order:
+        for room in analyzed_rooms:
+            if _floor_label_from_text(f"{room.name} {room.note}") != floor:
+                continue
+            _create_room_from_analysis(project, room, surface_wallpapers, default_wallpaper)
+        for room_name in missing_rooms:
+            if _floor_label_from_text(room_name) != floor:
+                continue
+            _create_empty_room(
+                project,
+                room_name,
+                ROOM_SOURCE_AI_MISSING,
+                "抽出失敗: 面積、開口部を入力してください",
+                default_wallpaper,
+            )
+
+
+def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpaper):
+    created = Room(
+        project=project,
+        name=room.name,
+        source_type=ROOM_SOURCE_AI,
+        perimeter_m=room.perimeter_m,
+        height_m=room.height_m,
+        opening_area_m2=room.opening_area_m2,
+        ceiling_area_m2=room.ceiling_area_m2,
+        note=room.note,
+    )
+    for field, _label, _surface_type in SURFACE_FIELDS:
+        created.apply_wallpaper(field, surface_wallpapers.get(field, default_wallpaper))
+    if room.wall_surfaces:
+        for field, _label, surface_type in SURFACE_FIELDS:
+            if surface_type == "ceiling":
+                created.ceiling_surface_area_m2 = room.ceiling_area_m2
+                continue
+            surface = _wall_surface_value(room.wall_surfaces, field)
+            setattr(created, f"{field}_surface_area_m2", _wall_surface_area(surface, room.height_m))
+            setattr(created, f"{field}_opening_area_m2", surface.get("opening_area_m2", Decimal("0")))
+        created.sync_totals_from_surface_measurements()
+    else:
+        created.set_default_surface_measurements()
+    created.save()
+
+
+def _create_empty_room(project, name, source_type, note, default_wallpaper):
+    room = Room(
+        project=project,
+        name=name,
+        source_type=source_type,
+        perimeter_m=Decimal("0"),
+        height_m=Decimal("0"),
+        opening_area_m2=Decimal("0"),
+        ceiling_area_m2=Decimal("0"),
+        note=note,
+    )
+    room.apply_wallpaper_to_all_surfaces(default_wallpaper)
+    room.set_default_surface_measurements()
+    room.save()
+    return room
+
+
+def _missing_room_names(missing_rooms, analyzed_rooms):
+    extracted = {_normalize_room_name(room.name) for room in analyzed_rooms}
+    names = []
+    seen = set()
+    for room_name in missing_rooms:
+        normalized = _normalize_room_name(room_name)
+        if not normalized or normalized in extracted or normalized in seen:
+            continue
+        seen.add(normalized)
+        names.append(str(room_name).strip())
+    return names
+
+
+def _normalize_room_name(value):
+    return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789")).upper().replace(" ", "")
+
+
+def _floor_label_from_text(value):
+    source = str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+    match = re.search(r"([1-3])\s*(?:F|階)", source, re.IGNORECASE)
+    if match:
+        return f"{match.group(1)}F"
+    return ""
+
+
+def _create_manual_rooms_from_post(post_data, project, default_wallpaper):
+    floors = post_data.getlist("new_room_floor")
+    names = post_data.getlist("new_room_name")
+    for floor, name in zip(floors, names):
+        floor = floor if floor in {"1F", "2F", "3F"} else "1F"
+        room_name = str(name or "").strip()
+        if not room_name:
+            continue
+        if not _floor_label_from_text(room_name):
+            room_name = f"{floor} {room_name}"
+        _create_empty_room(
+            project,
+            room_name,
+            ROOM_SOURCE_MANUAL,
+            "手動追加: 面積、開口部を入力してください",
+            default_wallpaper,
         )
-        for field, _label, _surface_type in SURFACE_FIELDS:
-            created.apply_wallpaper(field, surface_wallpapers.get(field, default_wallpaper))
-        if room.wall_surfaces:
-            for field, _label, surface_type in SURFACE_FIELDS:
-                if surface_type == "ceiling":
-                    created.ceiling_surface_area_m2 = room.ceiling_area_m2
-                    continue
-                surface = _wall_surface_value(room.wall_surfaces, field)
-                setattr(created, f"{field}_surface_area_m2", _wall_surface_area(surface, room.height_m))
-                setattr(created, f"{field}_opening_area_m2", surface.get("opening_area_m2", Decimal("0")))
-            created.sync_totals_from_surface_measurements()
-        else:
-            created.set_default_surface_measurements()
-        created.save()
 
 
 def _wall_surface_value(wall_surfaces, field):
@@ -480,6 +574,7 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
             analysis.rooms,
             default_wallpaper=default_wallpaper,
             surface_wallpapers=surface_wallpapers,
+            missing_rooms=analysis.missing_rooms,
         )
         project.memo = _join_memo(project.memo, analysis.memo)
         project.save(update_fields=["memo"])

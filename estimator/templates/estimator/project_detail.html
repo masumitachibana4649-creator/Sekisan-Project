@@ -91,6 +91,12 @@
   {% if has_estimated_openings %}
     <p class="estimate-note">青文字は展開図・平面図の縮尺と既知寸法からの推定値なので注意</p>
   {% endif %}
+  {% if has_ai_missing_rooms %}
+    <p class="estimate-note source-missing-note">赤文字は抽出に失敗した部屋なので編集画面で面積、開口部を入力してください</p>
+  {% endif %}
+  {% if has_manual_rooms or edit_mode %}
+    <p class="estimate-note source-manual-note">緑文字は追加した部屋なので編集画面で面積、開口部を入力してください</p>
+  {% endif %}
   {% if project.has_drawing_pdf %}
     <div class="page-map-summary">
       <span>1F平面図: {{ project.page_1f_plan }}</span>
@@ -107,12 +113,12 @@
     <div class="result-head">
       <span>No</span><span>階</span><span>部屋名</span><span>1面</span><span>2面</span><span>3面</span><span>4面</span><span>天井</span><span>面積/本数</span><span>備考</span>
     </div>
-    <div class="result-body">
+    <div class="result-body" data-room-detail-body>
     {% for room in rooms %}
-      <div class="room-detail-group">
+      <div class="room-detail-group {% if room.excluded_from_summary %}is-summary-excluded{% endif %}">
         <strong class="room-no-cell">{{ forloop.counter }}</strong>
         <span class="room-floor-cell">{{ room.display_floor_label }}</span>
-        <strong class="room-name-cell">{{ room.display_room_name }}</strong>
+        <strong class="room-name-cell {% if room.source_type == "ai_missing" %}source-missing-room{% elif room.source_type == "manual" %}source-manual-room{% endif %}">{{ room.display_room_name }}</strong>
         <span class="room-wallpaper-cell">
           {% if edit_mode %}
             <select class="room-wallpaper-select" name="room_{{ room.pk }}_east_wallpaper_no">
@@ -170,6 +176,10 @@
         </span>
         <span class="room-total-cell">{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
         <span class="room-note-cell">{{ room.note|room_note }}</span>
+        <label class="room-exclude-cell">
+          <input type="checkbox" name="room_{{ room.pk }}_excluded_from_summary" value="1" {% if room.excluded_from_summary %}checked{% endif %} {% if not edit_mode %}disabled{% endif %}>
+          <span>集計対象外</span>
+        </label>
         <strong class="room-sub-label">面積(m2)</strong>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_east_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.east_surface_area_m2 }}">{% else %}{{ room.east_surface_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell">{% if edit_mode %}<input name="room_{{ room.pk }}_west_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.west_surface_area_m2 }}">{% else %}{{ room.west_surface_area_m2 }}{% endif %}</span>
@@ -195,6 +205,11 @@
     {% endfor %}
     </div>
   </div>
+  {% if edit_mode and rooms %}
+    <div class="room-add-actions">
+      <button class="secondary-action" type="button" data-open-add-room>部屋追加</button>
+    </div>
+  {% endif %}
   </section>
 
   {% if edit_mode %}
@@ -220,6 +235,31 @@
       </label>
     </div>
   </section>
+  {% endif %}
+  {% if edit_mode %}
+    <div data-new-room-fields></div>
+  {% endif %}
+  {% if edit_mode %}
+    <dialog class="room-add-dialog" data-add-room-dialog>
+      <div class="room-add-dialog-body">
+        <h3>部屋追加</h3>
+        <label>階
+          <select data-new-room-floor>
+            <option value="1F" selected>1F</option>
+            <option value="2F">2F</option>
+            <option value="3F">3F</option>
+          </select>
+        </label>
+        <label>部屋名
+          <input type="text" data-new-room-name maxlength="80">
+        </label>
+        <p class="form-error is-hidden" data-new-room-error>部屋名を入力してください</p>
+        <div class="dialog-actions">
+          <button class="secondary-action" type="button" data-cancel-add-room>キャンセル</button>
+          <button class="primary-action" type="button" data-confirm-add-room>OK</button>
+        </div>
+      </div>
+    </dialog>
   {% endif %}
 </form>
 
