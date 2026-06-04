@@ -517,7 +517,7 @@ textarea { resize: vertical; }
 .result-row,
 .room-detail-group {
   display: grid;
-  grid-template-columns: minmax(48px, 0.35fr) minmax(64px, 0.45fr) minmax(140px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
+  grid-template-columns: 48px 48px minmax(160px, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
   gap: 10px;
   min-width: 1720px;
   align-items: start;
@@ -567,7 +567,7 @@ textarea { resize: vertical; }
 
 .room-no-cell,
 .room-floor-cell {
-  text-align: right;
+  text-align: left;
 }
 
 .room-name-cell {
