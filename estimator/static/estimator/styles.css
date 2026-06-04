@@ -538,6 +538,7 @@ textarea { resize: vertical; }
   z-index: 1;
   background: var(--panel);
   min-width: 1720px;
+  column-gap: 0.5em;
 }
 
 .result-head span:nth-child(n+4):not(:last-child) {

@@ -256,7 +256,7 @@ class WallpaperEstimateTests(TestCase):
         )
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
-        self.assertContains(response, "<span>No.</span><span>階</span><span>部屋名</span>", html=True)
+        self.assertContains(response, "<span>No</span><span>階</span><span>部屋名</span>", html=True)
         self.assertContains(response, '<strong class="room-no-cell">1</strong>', html=True)
         self.assertContains(response, '<span class="room-floor-cell">1F</span>', html=True)
         self.assertContains(response, '<strong class="room-name-cell">トイレ</strong>', html=True)
