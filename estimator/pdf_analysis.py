@@ -74,16 +74,22 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
     missing_rooms = ai_result.get("missing_rooms", [])
+    missing_room_count = _missing_room_count(missing_rooms, rooms)
     validation_warnings = _validate_room_extraction(
         pdf_path,
         parsed_pages,
         rooms,
         room_candidate_text=room_candidate_text,
         expected_counts=expected_counts,
+        missing_room_count=missing_room_count,
     )
 
     page_summary = "、".join(
         f"{PAGE_LABELS[key]}={value}P" for key, value in parsed_pages.items() if value is not None
+    )
+    room_count_summary = (
+        f"件数内訳: AI抽出={len(rooms)}件、抽出失敗追加={missing_room_count}件、"
+        f"表示合計={len(rooms) + missing_room_count}件。"
     )
     warnings = " ".join(ai_result["warnings"] + validation_warnings)
     warning_text = f" 注意: {warnings}" if warnings else ""
@@ -92,7 +98,7 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
         memo=(
             f"PDF AI読取: {page_summary}。"
             "部屋名・周長・天井高・開口部面積・天井面積をAIで抽出し、"
-            f"壁紙量とロール本数はシステムの計算式で算出。{warning_text}"
+            f"壁紙量とロール本数はシステムの計算式で算出。{room_count_summary}{warning_text}"
         ),
         missing_rooms=missing_rooms,
     )
@@ -424,7 +430,14 @@ def _wall_surfaces_from_ai(value):
     return surfaces
 
 
-def _validate_room_extraction(pdf_path, parsed_pages, rooms, room_candidate_text=None, expected_counts=None):
+def _validate_room_extraction(
+    pdf_path,
+    parsed_pages,
+    rooms,
+    room_candidate_text=None,
+    expected_counts=None,
+    missing_room_count=0,
+):
     room_candidate_text = (
         room_candidate_text if room_candidate_text is not None else _room_candidate_page_text(pdf_path, parsed_pages)
     )
@@ -451,6 +464,7 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms, room_candidate_text
 
     expected_total = sum(expected_counts.values())
     actual_total = len(rooms)
+    display_total = actual_total + missing_room_count
     missing_total = sum(missing.values())
     missing_summary = "、".join(f"{label}{count}件" for label, count in missing.items())
     if _missing_only_secondary_spaces(missing):
@@ -459,12 +473,14 @@ def _validate_room_extraction(pdf_path, parsed_pages, rooms, room_candidate_text
     if expected_total >= 5 and (actual_total < (expected_total * Decimal("0.60")) or missing_total >= 3):
         return [
             "PDF AI読取の部屋抽出数が不足している可能性があります。"
-            f"平面図上の室名候補は約{expected_total}件、抽出結果は{actual_total}件です。"
+            f"平面図・天井伏図上の室名候補は約{expected_total}件、"
+            f"AI抽出は{actual_total}件、抽出失敗追加は{missing_room_count}件、"
+            f"表示合計は{display_total}件です。"
             f"未抽出候補: {missing_summary}。"
             "積算結果を確認し、必要に応じて編集で部屋・面積を補正してください。"
         ]
 
-    return [f"平面図上の室名候補に対し、未抽出の可能性があります: {missing_summary}。"]
+    return [f"平面図・天井伏図上の室名候補に対し、未抽出の可能性があります: {missing_summary}。"]
 
 
 def _missing_only_secondary_spaces(missing):
@@ -485,14 +501,31 @@ def _page_text_for_keys(pdf_path, parsed_pages, page_keys):
 
         reader = PdfReader(str(pdf_path))
         texts = []
+        seen_pages = set()
         for key in page_keys:
             page_number = parsed_pages.get(key)
-            if not page_number:
+            if not page_number or page_number in seen_pages:
                 continue
+            seen_pages.add(page_number)
             texts.append(reader.pages[page_number - 1].extract_text() or "")
         return "\n".join(texts)
     except Exception:
         return ""
+
+
+def _missing_room_count(missing_rooms, analyzed_rooms):
+    extracted = {_normalize_room_name(room.name) for room in analyzed_rooms}
+    seen = set()
+    for room_name in missing_rooms or []:
+        normalized = _normalize_room_name(room_name)
+        if not normalized or normalized in extracted:
+            continue
+        seen.add(normalized)
+    return len(seen)
+
+
+def _normalize_room_name(value):
+    return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789")).upper().replace(" ", "")
 
 
 def _expected_room_counts(plan_text):

@@ -842,6 +842,33 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("洗面所", text)
         self.assertNotIn("展開図", text)
 
+    def test_room_candidate_text_deduplicates_same_page_numbers(self):
+        class FakePage:
+            def __init__(self, text):
+                self.text = text
+                self.read_count = 0
+
+            def extract_text(self):
+                self.read_count += 1
+                return self.text
+
+        shared_page = FakePage("1F平面図 LDK")
+
+        class FakeReader:
+            pages = [shared_page]
+
+            def __init__(self, _path):
+                pass
+
+        with patch("pypdf.PdfReader", FakeReader):
+            text = _room_candidate_page_text(
+                "dummy.pdf",
+                {"page_1f_plan": 1, "page_1f_ceiling_plan": 1},
+            )
+
+        self.assertEqual(text.count("LDK"), 1)
+        self.assertEqual(shared_page.read_count, 1)
+
     def test_analysis_prompt_keeps_rooms_when_development_drawings_are_incomplete(self):
         prompt = _analysis_prompt(
             {
@@ -905,6 +932,7 @@ class WallpaperEstimateTests(TestCase):
                     "evidence": "2F平面図",
                 },
             ],
+            "missing_rooms": ["1階 収納", "2階 トイレ", "2階 LDK"],
             "warnings": [],
         }))
         plan_text = "洋室 洋室 洋室 収納 収納 収納 収納 廊下 玄関 トイレ LDK 廊下 洗面所 トイレ 収納 浴室 バルコニー"
@@ -917,6 +945,8 @@ class WallpaperEstimateTests(TestCase):
 
         self.assertEqual(len(result.rooms), 2)
         self.assertIn("部屋抽出数が不足", result.memo)
+        self.assertIn("件数内訳: AI抽出=2件、抽出失敗追加=2件、表示合計=4件", result.memo)
+        self.assertIn("AI抽出は2件、抽出失敗追加は2件、表示合計は4件", result.memo)
         self.assertIn("未抽出候補", result.memo)
 
     def test_analyze_wallpaper_pdf_warns_instead_of_failing_when_only_secondary_spaces_are_missing(self):
