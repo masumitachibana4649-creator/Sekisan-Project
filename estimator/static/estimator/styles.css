@@ -554,6 +554,7 @@ textarea { resize: vertical; }
 
 .room-detail-group {
   margin-top: 10px;
+  row-gap: 4px;
 }
 
 .room-wallpaper-cell select {
@@ -595,7 +596,12 @@ textarea { resize: vertical; }
 .room-note-cell {
   grid-column: 10;
   grid-row: 1 / span 3;
+  padding-left: 2em;
   line-height: 1.55;
+}
+
+.result-head span:last-child {
+  padding-left: 2em;
 }
 
 .room-exclude-cell {

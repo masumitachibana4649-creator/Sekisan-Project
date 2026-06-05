@@ -57,6 +57,9 @@ ROOM_CANDIDATE_PAGE_KEYS = PLAN_PAGE_KEYS + CEILING_PLAN_PAGE_KEYS
 TABLE_PAGE_KEYWORDS = (
     ("居室区画面積表", "居室区画面積表"),
     ("床面積表", "床面積表"),
+    ("室内仕上表", "室内仕上表"),
+    ("内部仕上表", "内部仕上表"),
+    ("建具表", "建具表"),
 )
 NON_WALLPAPER_ROOM_LABELS = ("浴室", "バルコニー")
 NON_WALLPAPER_CANDIDATE_NAMES = ("UB", "浴室", "バルコニー", "ポーチ", "屋外")
@@ -318,6 +321,10 @@ def _analysis_prompt(parsed_pages, expected_counts=None, table_pages=None, room_
 - 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
 - 表ページから検出した部屋候補がある場合は、その候補リストを部屋一覧の主根拠として全件確認してください。
 - 表ページ候補のうち、浴室・UB・バルコニー・ポーチ・屋外部分以外は、面積や開口部が推定でも rooms または missing_rooms のどちらかに必ず含めてください。
+- 表ページ候補の面積はその部屋の天井面積 ceiling_area_m2 として原則そのまま採用してください。表ページ候補に面積がある場合は、平面図や展開図から推定した別値で上書きしないでください。
+- 階が異なる同名部屋は別部屋として扱ってください。例: 1F トイレ と 2F トイレ は必ず別々に確認し、片方だけで処理済みにしないでください。
+- 収納、CL、SIC、PS、吹抜、ファミリークローゼットも表ページ候補にある場合は必ず確認してください。寸法が読めない場合でも missing_rooms に入れてください。
+- 複数の収納を一式扱いにする場合は、同じ階の収納候補をすべてカバーしていることを evidence に明記してください。CL、PS、吹抜、ファミリークローゼットは収納一式に含めず、個別候補として扱ってください。
 - 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
 - 上記の補助室名候補は抽出漏れチェックに使います。表ページ候補を優先し、平面図と天井伏図の室名候補も補助根拠として確認してください。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
 - roomsに入れるだけの面積・開口部情報をどうしても抽出できない室名候補は、missing_rooms に「階 部屋名」の形式で入れてください。missing_roomsにはroomsに入れた部屋名を重複して入れないでください。
@@ -559,14 +566,24 @@ def _validate_room_extraction(
 
 def _validate_room_candidates(rooms, missing_rooms, room_candidates):
     displayed = set()
+    storage_bundle_floors = set()
     for room in rooms:
-        displayed.update(_room_match_keys(room.name))
+        displayed.update(_displayed_room_match_keys(room.name, room.note))
+        if _is_storage_bundle(room.name):
+            floor = _floor_label_from_text(f"{room.name} {room.note}")
+            if floor:
+                storage_bundle_floors.add(floor)
     for room_name in missing_rooms or []:
-        displayed.update(_room_match_keys(room_name))
+        displayed.update(_displayed_room_match_keys(room_name))
+        if _is_storage_bundle(room_name):
+            floor = _floor_label_from_text(room_name)
+            if floor:
+                storage_bundle_floors.add(floor)
     missing_candidates = [
         candidate
         for candidate in room_candidates
-        if _normalize_room_name(candidate.name) and not (_candidate_match_keys(candidate) & displayed)
+        if _normalize_room_name(candidate.name)
+        and not _candidate_is_displayed(candidate, displayed, storage_bundle_floors)
     ]
     if not missing_candidates:
         return []
@@ -674,6 +691,8 @@ def _room_table_candidates_from_text(text, source, page_number):
         return _floor_area_table_candidates(text, source, page_number)
     if source == "居室区画面積表":
         return _living_area_table_candidates(text, source, page_number)
+    if source in {"室内仕上表", "内部仕上表"}:
+        return _finish_table_candidates(text, source, page_number)
     return []
 
 
@@ -715,6 +734,18 @@ def _living_area_table_candidates(text, source, page_number):
         raw_candidates.extend(_room_candidates_from_line(line, "", source, page_number))
 
     return _infer_floors_for_living_area_candidates(raw_candidates)
+
+
+def _finish_table_candidates(text, source, page_number):
+    candidates = []
+    floor = ""
+    for raw_line in text.splitlines():
+        line = unicodedata.normalize("NFKC", raw_line).strip()
+        floor_match = re.search(r"([1-9])\s*(?:F|階)", line, re.IGNORECASE)
+        if floor_match:
+            floor = f"{floor_match.group(1)}F"
+        candidates.extend(_room_candidates_from_line(line, floor, source, page_number))
+    return candidates
 
 
 def _table_section(text, marker):
@@ -786,6 +817,10 @@ def _is_supported_table_page(text, label):
         return "部 屋" in normalized or "部屋" in normalized
     if label == "床面積表":
         return "部屋" in normalized and ("小計" in normalized or "非居室" in normalized)
+    if label in {"室内仕上表", "内部仕上表"}:
+        return any(keyword in normalized for keyword in ("壁", "天井", "クロス", "仕上"))
+    if label == "建具表":
+        return any(keyword in normalized for keyword in ("建具", "開口", "姿図", "寸法"))
     return False
 
 
@@ -821,16 +856,50 @@ def _room_match_keys(value):
     normalized = _normalize_room_name(value)
     keys = {normalized} if normalized else set()
     without_floor = re.sub(r"^[1-9](?:F|階)", "", normalized)
-    if without_floor:
+    has_floor = without_floor != normalized
+    if without_floor and not has_floor:
         keys.add(without_floor)
     return keys
 
 
 def _candidate_match_keys(candidate):
-    keys = _room_match_keys(candidate.name)
+    keys = set()
     if candidate.floor:
         keys.add(_normalize_room_name(f"{candidate.floor} {candidate.name}"))
+    else:
+        keys.update(_room_match_keys(candidate.name))
     return keys
+
+
+def _displayed_room_match_keys(name, note=""):
+    keys = _room_match_keys(name)
+    floor = _floor_label_from_text(f"{name} {note}")
+    if floor:
+        keys.add(_normalize_room_name(f"{floor} {name}"))
+    return keys
+
+
+def _candidate_is_displayed(candidate, displayed, storage_bundle_floors):
+    if _candidate_match_keys(candidate) & displayed:
+        return True
+    if (
+        _normalize_room_name(candidate.name) == "収納"
+        and candidate.floor
+        and _normalize_floor(candidate.floor) in storage_bundle_floors
+    ):
+        return True
+    return False
+
+
+def _is_storage_bundle(value):
+    normalized = _normalize_room_name(value)
+    return "収納" in normalized and "一式" in normalized
+
+
+def _floor_label_from_text(value):
+    normalized = unicodedata.normalize("NFKC", str(value or "")).upper()
+    match = re.search(r"([1-9])\s*(?:F|階)", normalized)
+    return f"{match.group(1)}F" if match else ""
 
 
 def _expected_room_counts(plan_text):

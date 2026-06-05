@@ -20,8 +20,10 @@ from .pdf_analysis import (
     analyze_wallpaper_pdf,
     _analysis_page_numbers,
     _analysis_prompt,
+    _detect_table_pages,
     _expected_room_counts,
     _parse_ai_analysis_response,
+    _validate_room_candidates,
     _room_table_candidates_from_text,
     _room_candidate_page_text,
     _sample_plan_rooms,
@@ -941,6 +943,59 @@ class WallpaperEstimateTests(TestCase):
         )
 
         self.assertEqual(pages, [9, 10, 6, 11, 12, 14, 22])
+
+    def test_detect_table_pages_includes_finish_and_fixture_tables(self):
+        class FakePage:
+            def __init__(self, text):
+                self.text = text
+
+            def extract_text(self):
+                return self.text
+
+        class FakeReader:
+            pages = [
+                FakePage("室内仕上表 壁 クロス 天井"),
+                FakePage("内部仕上表 壁 天井 仕上"),
+                FakePage("建具表 開口 寸法"),
+                FakePage("床面積表 単位 ㎡"),
+            ]
+
+            def __init__(self, _path):
+                pass
+
+        with patch("pypdf.PdfReader", FakeReader):
+            pages = _detect_table_pages("dummy.pdf")
+
+        self.assertEqual(pages, [("室内仕上表", 1), ("内部仕上表", 2), ("建具表", 3)])
+
+    def test_room_candidate_validation_respects_floor_for_same_room_name(self):
+        rooms = [
+            AnalyzedRoom("1F トイレ", Decimal("4"), Decimal("2.4"), Decimal("0"), Decimal("1.4"), "根拠: 1F平面図"),
+        ]
+        candidates = [
+            RoomCandidate("1F", "トイレ", Decimal("1.45"), "居室区画面積表", 22),
+            RoomCandidate("2F", "トイレ", Decimal("1.45"), "居室区画面積表", 22),
+        ]
+
+        warnings = _validate_room_candidates(rooms, [], candidates)
+
+        self.assertIn("2F トイレ", warnings[0])
+        self.assertNotIn("1F トイレ、", warnings[0])
+
+    def test_room_candidate_validation_treats_same_floor_storage_bundle_as_displayed(self):
+        rooms = [
+            AnalyzedRoom("1F 収納 一式", Decimal("0"), Decimal("2.4"), Decimal("0"), Decimal("2.48"), "根拠: 1F 収納群"),
+        ]
+        candidates = [
+            RoomCandidate("1F", "収納", Decimal("2.48"), "居室区画面積表", 22),
+            RoomCandidate("1F", "収納", Decimal("0.83"), "居室区画面積表", 22),
+            RoomCandidate("2F", "CL", Decimal("0.93"), "居室区画面積表", 22),
+        ]
+
+        warnings = _validate_room_candidates(rooms, [], candidates)
+
+        self.assertNotIn("1F 収納", warnings[0])
+        self.assertIn("2F CL", warnings[0])
 
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
         extracted_room = _parse_ai_analysis_response(json.dumps({
