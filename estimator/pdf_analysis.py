@@ -29,6 +29,7 @@ class PdfAnalysisResult:
     rooms: list[AnalyzedRoom]
     memo: str
     missing_rooms: list[str] | None = None
+    room_candidates: list["RoomCandidate"] | None = None
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,11 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
 
     missing_rooms = ai_result.get("missing_rooms", [])
-    missing_room_count = _missing_room_count(missing_rooms, rooms)
+    missing_room_count = (
+        _candidate_missing_room_count(rooms, missing_rooms, room_candidates)
+        if room_candidates
+        else _missing_room_count(missing_rooms, rooms)
+    )
     validation_warnings = _validate_room_extraction(
         pdf_path,
         parsed_pages,
@@ -131,6 +136,7 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
             f"壁紙量とロール本数はシステムの計算式で算出。{room_count_summary}{warning_text}"
         ),
         missing_rooms=missing_rooms,
+        room_candidates=room_candidates,
     )
 
 
@@ -590,7 +596,7 @@ def _validate_room_candidates(rooms, missing_rooms, room_candidates):
 
     expected_total = len(room_candidates)
     ai_total = len(rooms)
-    missing_total = _missing_room_count(missing_rooms, rooms)
+    missing_total = len(missing_candidates)
     display_total = ai_total + missing_total
     missing_summary = "、".join(_candidate_label(candidate) for candidate in missing_candidates[:12])
     if len(missing_candidates) > 12:
@@ -682,8 +688,63 @@ def _room_table_candidates(pdf_path, table_pages):
             if _normalize_room_name(candidate.name) and not _is_non_wallpaper_candidate(candidate.name)
         ]
         if candidates:
-            return candidates
+            return _normalize_room_table_candidates(candidates)
     return []
+
+
+def _normalize_room_table_candidates(candidates):
+    aggregated = []
+    storage_by_floor = {}
+    for candidate in candidates:
+        if _normalize_room_name(candidate.name) == "収納":
+            current = storage_by_floor.get(candidate.floor)
+            area = candidate.area_m2 or Decimal("0")
+            if current is None:
+                storage_by_floor[candidate.floor] = RoomCandidate(
+                    floor=candidate.floor,
+                    name="収納 一式",
+                    area_m2=area,
+                    source=candidate.source,
+                    page=candidate.page,
+                )
+            else:
+                storage_by_floor[candidate.floor] = RoomCandidate(
+                    floor=current.floor,
+                    name=current.name,
+                    area_m2=(current.area_m2 or Decimal("0")) + area,
+                    source=current.source,
+                    page=current.page,
+                )
+            continue
+        aggregated.append(candidate)
+    aggregated.extend(storage_by_floor.values())
+    return _deduplicate_candidate_names(aggregated)
+
+
+def _deduplicate_candidate_names(candidates):
+    totals = {}
+    for candidate in candidates:
+        key = (_normalize_floor(candidate.floor), _normalize_room_name(candidate.name))
+        totals[key] = totals.get(key, 0) + 1
+
+    seen = {}
+    renamed = []
+    for candidate in candidates:
+        key = (_normalize_floor(candidate.floor), _normalize_room_name(candidate.name))
+        seen[key] = seen.get(key, 0) + 1
+        name = candidate.name
+        if totals[key] > 1:
+            name = f"{candidate.name} {seen[key]}"
+        renamed.append(
+            RoomCandidate(
+                floor=candidate.floor,
+                name=name,
+                area_m2=candidate.area_m2,
+                source=candidate.source,
+                page=candidate.page,
+            )
+        )
+    return renamed
 
 
 def _room_table_candidates_from_text(text, source, page_number):
@@ -840,6 +901,25 @@ def _missing_room_count(missing_rooms, analyzed_rooms):
             continue
         seen.add(normalized)
     return len(seen)
+
+
+def _candidate_missing_room_count(rooms, missing_rooms, room_candidates):
+    displayed = set()
+    storage_bundle_floors = set()
+    for room in rooms:
+        displayed.update(_displayed_room_match_keys(room.name, room.note))
+        if _is_storage_bundle(room.name):
+            floor = _floor_label_from_text(f"{room.name} {room.note}")
+            if floor:
+                storage_bundle_floors.add(floor)
+    for room_name in missing_rooms or []:
+        displayed.update(_displayed_room_match_keys(room_name))
+    return sum(
+        1
+        for candidate in room_candidates
+        if _normalize_room_name(candidate.name)
+        and not _candidate_is_displayed(candidate, displayed, storage_bundle_floors)
+    )
 
 
 def _normalize_room_name(value):

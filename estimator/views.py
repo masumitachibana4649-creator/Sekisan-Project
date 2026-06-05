@@ -382,26 +382,34 @@ def _raise_forbidden():
     raise PermissionDenied("この積算データを表示する権限がありません。")
 
 
-def _create_rooms_from_analysis(project, analyzed_rooms, default_wallpaper=None, surface_wallpapers=None, missing_rooms=None):
+def _create_rooms_from_analysis(
+    project,
+    analyzed_rooms,
+    default_wallpaper=None,
+    surface_wallpapers=None,
+    missing_rooms=None,
+    room_candidates=None,
+):
     default_wallpaper = default_wallpaper or Wallpaper.objects.get(number="001")
     surface_wallpapers = surface_wallpapers or {field: default_wallpaper for field, _label, _type in SURFACE_FIELDS}
-    missing_rooms = _missing_room_names(missing_rooms or [], analyzed_rooms)
+    missing_rooms = _missing_room_specs(missing_rooms or [], analyzed_rooms, room_candidates=room_candidates)
     floor_order = ("1F", "2F", "3F", "")
     for floor in floor_order:
         for room in analyzed_rooms:
             if _floor_label_from_text(f"{room.name} {room.note}") != floor:
                 continue
             _create_room_from_analysis(project, room, surface_wallpapers, default_wallpaper)
-        for room_name in missing_rooms:
-            if _floor_label_from_text(room_name) != floor:
+        for missing_room in missing_rooms:
+            if _floor_label_from_text(missing_room["name"]) != floor:
                 continue
             _create_empty_room(
                 project,
-                room_name,
+                missing_room["name"],
                 ROOM_SOURCE_AI_MISSING,
-                "抽出失敗: 面積、開口部を入力してください",
+                missing_room["note"],
                 default_wallpaper,
                 surface_wallpapers=surface_wallpapers,
+                ceiling_area_m2=missing_room["ceiling_area_m2"],
             )
 
 
@@ -432,7 +440,7 @@ def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpa
     created.save()
 
 
-def _create_empty_room(project, name, source_type, note, default_wallpaper, surface_wallpapers=None):
+def _create_empty_room(project, name, source_type, note, default_wallpaper, surface_wallpapers=None, ceiling_area_m2=Decimal("0")):
     room = Room(
         project=project,
         name=name,
@@ -440,7 +448,7 @@ def _create_empty_room(project, name, source_type, note, default_wallpaper, surf
         perimeter_m=Decimal("0"),
         height_m=Decimal("0"),
         opening_area_m2=Decimal("0"),
-        ceiling_area_m2=Decimal("0"),
+        ceiling_area_m2=ceiling_area_m2,
         note=note,
     )
     if surface_wallpapers:
@@ -454,6 +462,13 @@ def _create_empty_room(project, name, source_type, note, default_wallpaper, surf
 
 
 def _missing_room_names(missing_rooms, analyzed_rooms):
+    return [missing_room["name"] for missing_room in _missing_room_specs(missing_rooms, analyzed_rooms)]
+
+
+def _missing_room_specs(missing_rooms, analyzed_rooms, room_candidates=None):
+    if room_candidates:
+        return _missing_room_specs_from_candidates(room_candidates, analyzed_rooms, missing_rooms)
+
     extracted = {_normalize_room_name(room.name) for room in analyzed_rooms}
     names = []
     seen = set()
@@ -462,8 +477,57 @@ def _missing_room_names(missing_rooms, analyzed_rooms):
         if not normalized or normalized in extracted or normalized in seen:
             continue
         seen.add(normalized)
-        names.append(str(room_name).strip())
+        names.append({
+            "name": str(room_name).strip(),
+            "ceiling_area_m2": Decimal("0"),
+            "note": "抽出失敗: 面積、開口部を入力してください",
+        })
     return names
+
+
+def _missing_room_specs_from_candidates(room_candidates, analyzed_rooms, missing_rooms):
+    extracted = set()
+    for room in analyzed_rooms:
+        extracted.update(_room_match_keys(room.name, room.note))
+    specs = []
+    seen = set()
+    for candidate in room_candidates:
+        room_name = _candidate_room_name(candidate)
+        normalized = _normalize_room_name(room_name)
+        if not normalized or _candidate_match_keys(candidate) & extracted or normalized in seen:
+            continue
+        seen.add(normalized)
+        area = candidate.area_m2 or Decimal("0")
+        specs.append({
+            "name": room_name,
+            "ceiling_area_m2": area,
+            "note": f"抽出失敗: 表ページから天井面積 {area}m2 を反映。壁面・開口部を入力してください",
+        })
+    return specs
+
+
+def _candidate_room_name(candidate):
+    if _floor_label_from_text(candidate.name):
+        return candidate.name
+    return f"{candidate.floor} {candidate.name}".strip()
+
+
+def _room_match_keys(name, note=""):
+    normalized = _normalize_room_name(name)
+    keys = {normalized} if normalized else set()
+    without_floor = re.sub(r"^[1-3](?:F|階)", "", normalized)
+    if without_floor and without_floor == normalized:
+        keys.add(without_floor)
+    floor = _floor_label_from_text(f"{name} {note}")
+    if floor:
+        keys.add(_normalize_room_name(f"{floor} {name}"))
+    return keys
+
+
+def _candidate_match_keys(candidate):
+    if candidate.floor:
+        return {_normalize_room_name(f"{candidate.floor} {candidate.name}")}
+    return _room_match_keys(candidate.name)
 
 
 def _normalize_room_name(value):
@@ -605,6 +669,7 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
             default_wallpaper=default_wallpaper,
             surface_wallpapers=surface_wallpapers,
             missing_rooms=analysis.missing_rooms,
+            room_candidates=analysis.room_candidates,
         )
         project.memo = _join_memo(project.memo, analysis.memo)
         project.save(update_fields=["memo"])

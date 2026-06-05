@@ -25,10 +25,12 @@ from .pdf_analysis import (
     _parse_ai_analysis_response,
     _validate_room_candidates,
     _room_table_candidates_from_text,
+    _normalize_room_table_candidates,
     _room_candidate_page_text,
     _sample_plan_rooms,
     _write_selected_pages_pdf,
 )
+from .views import _create_rooms_from_analysis
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
@@ -566,6 +568,31 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "source-missing-room")
         self.assertContains(response, "赤文字は抽出に失敗した部屋なので編集画面で面積、開口部を入力してください")
 
+    def test_missing_rooms_from_table_candidates_keep_ceiling_area(self):
+        project = Project.objects.create(name="表候補面積反映")
+        Wallpaper.ensure_defaults()
+
+        _create_rooms_from_analysis(
+            project,
+            [AnalyzedRoom("1F LDK", Decimal("10"), Decimal("2.4"), Decimal("0"), Decimal("20"), "根拠: 1F平面図")],
+            missing_rooms=[],
+            room_candidates=[
+                RoomCandidate("1F", "LDK", Decimal("20.00"), "居室区画面積表", 22),
+                RoomCandidate("1F", "収納 一式", Decimal("3.72"), "居室区画面積表", 22),
+                RoomCandidate("2F", "CL 1", Decimal("0.93"), "居室区画面積表", 22),
+                RoomCandidate("2F", "CL 2", Decimal("0.93"), "居室区画面積表", 22),
+            ],
+        )
+
+        rooms = {room.name: room for room in project.rooms.all()}
+        self.assertEqual(project.rooms.count(), 4)
+        self.assertEqual(rooms["1F 収納 一式"].source_type, "ai_missing")
+        self.assertEqual(rooms["1F 収納 一式"].ceiling_area_m2, Decimal("3.72"))
+        self.assertEqual(rooms["1F 収納 一式"].ceiling_surface_area_m2, Decimal("3.72"))
+        self.assertEqual(rooms["2F CL 1"].ceiling_area_m2, Decimal("0.93"))
+        self.assertEqual(rooms["2F CL 2"].ceiling_area_m2, Decimal("0.93"))
+        self.assertIn("表ページから天井面積 3.72m2 を反映", rooms["1F 収納 一式"].note)
+
     def test_pdf_missing_room_candidates_use_selected_surface_wallpapers(self):
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
@@ -929,6 +956,24 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(candidates[7].name, "洋室1")
         self.assertEqual(candidates[8].name, "ファミリークローゼット")
         self.assertEqual([candidate.name for candidate in candidates[-2:]], ["CL", "CL"])
+
+    def test_room_table_candidates_aggregate_storage_and_keep_duplicate_cl(self):
+        candidates = _normalize_room_table_candidates([
+            RoomCandidate("1F", "収納", Decimal("2.48"), "居室区画面積表", 22),
+            RoomCandidate("1F", "収納", Decimal("0.83"), "居室区画面積表", 22),
+            RoomCandidate("1F", "収納", Decimal("0.41"), "居室区画面積表", 22),
+            RoomCandidate("2F", "CL", Decimal("0.93"), "居室区画面積表", 22),
+            RoomCandidate("2F", "CL", Decimal("0.93"), "居室区画面積表", 22),
+        ])
+
+        self.assertEqual(
+            candidates,
+            [
+                RoomCandidate("2F", "CL 1", Decimal("0.93"), "居室区画面積表", 22),
+                RoomCandidate("2F", "CL 2", Decimal("0.93"), "居室区画面積表", 22),
+                RoomCandidate("1F", "収納 一式", Decimal("3.72"), "居室区画面積表", 22),
+            ],
+        )
 
     def test_analysis_page_numbers_include_detected_table_pages(self):
         pages = _analysis_page_numbers(
