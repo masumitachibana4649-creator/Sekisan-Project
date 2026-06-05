@@ -656,13 +656,164 @@ def _detect_table_pages(pdf_path):
 
     table_pages = []
     seen = set()
+    extracted_texts = []
     for index, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
+        extracted_texts.append(text)
         for label, keyword in TABLE_PAGE_KEYWORDS:
             if keyword in text and _is_supported_table_page(text, label) and (label, index) not in seen:
                 table_pages.append((label, index))
                 seen.add((label, index))
-    return table_pages
+    if not table_pages and _should_use_visual_table_detection(extracted_texts):
+        table_pages.extend(_detect_table_pages_with_ai(pdf_path, len(reader.pages)))
+    return _deduplicate_table_pages(table_pages)
+
+
+def _should_use_visual_table_detection(extracted_texts):
+    text = "\n".join(extracted_texts)
+    if not text.strip():
+        return True
+    normalized = unicodedata.normalize("NFKC", text)
+    table_keyword_count = sum(normalized.count(keyword) for _label, keyword in TABLE_PAGE_KEYWORDS)
+    related_keyword_count = sum(
+        normalized.count(keyword)
+        for keyword in ("面積", "部屋", "床", "居室", "仕上", "建具", "開口", "天井")
+    )
+    return table_keyword_count == 0 and related_keyword_count <= 10
+
+
+def _detect_table_pages_with_ai(pdf_path, page_count):
+    if not _setting("OPENAI_API_KEY"):
+        return []
+    if str(_setting("OPENAI_VISUAL_TABLE_PAGE_DETECTION", "true")).lower() in {"0", "false", "no", "off"}:
+        return []
+    try:
+        max_pages = int(_setting("OPENAI_TABLE_PAGE_DETECTION_MAX_PAGES", "60"))
+    except (TypeError, ValueError):
+        max_pages = 60
+    if page_count > max_pages:
+        return []
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return []
+
+    model = _setting("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
+    client = OpenAI(api_key=_setting("OPENAI_API_KEY"))
+    uploaded_file = None
+    try:
+        with open(pdf_path, "rb") as pdf_file:
+            uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
+        response = client.responses.create(
+            model=model,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_file", "file_id": uploaded_file.id},
+                        {"type": "input_text", "text": _table_page_detection_prompt(page_count)},
+                    ],
+                }
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "wallpaper_table_page_detection",
+                    "strict": True,
+                    "schema": _table_page_detection_schema(),
+                }
+            },
+        )
+        return _parse_table_page_detection_response(_response_text(response), page_count)
+    except Exception:
+        return []
+    finally:
+        if uploaded_file is not None:
+            try:
+                client.files.delete(uploaded_file.id)
+            except Exception:
+                pass
+
+
+def _table_page_detection_prompt(page_count):
+    labels = "、".join(label for label, _keyword in TABLE_PAGE_KEYWORDS)
+    return f"""
+添付PDFは建築図面です。PDF内の埋め込みテキストが文字化けしている可能性があるため、
+ページ画像を目視/OCRするつもりで、壁紙積算に使う表ページを判定してください。
+
+対象ページは1ページから{page_count}ページまでです。ページ番号はPDFビューア上の1始まりで返してください。
+
+検出対象:
+- {labels}
+
+判定ルール:
+- 図面名・表題欄・表の見出しを優先して判定してください。
+- 「床面積表」「居室区画面積表」は部屋候補と面積の根拠になるため特に拾ってください。
+- 「室内仕上表」「内部仕上表」は壁・天井・床などの仕上表であれば拾ってください。
+- 「建具表」は開口部の根拠になる建具姿図、建具リスト、建具寸法表であれば拾ってください。
+- 平面図、立面図、展開図、天井伏図だけのページは返さないでください。
+- 確信度が低いページは含めず、confidence は0から1で返してください。
+""".strip()
+
+
+def _table_page_detection_schema():
+    return {
+        "type": "object",
+        "properties": {
+            "table_pages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "label": {
+                            "type": "string",
+                            "enum": [label for label, _keyword in TABLE_PAGE_KEYWORDS],
+                        },
+                        "page": {"type": "integer", "minimum": 1},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    },
+                    "required": ["label", "page", "confidence"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["table_pages"],
+        "additionalProperties": False,
+    }
+
+
+def _parse_table_page_detection_response(response_text, page_count):
+    try:
+        payload = json.loads(response_text)
+    except json.JSONDecodeError:
+        return []
+
+    table_pages = []
+    supported_labels = {label for label, _keyword in TABLE_PAGE_KEYWORDS}
+    for item in payload.get("table_pages", []):
+        label = str(item.get("label") or "").strip()
+        try:
+            page = int(item.get("page"))
+            confidence = Decimal(str(item.get("confidence", 0)))
+        except Exception:
+            continue
+        if label not in supported_labels or page < 1 or page > page_count or confidence < Decimal("0.55"):
+            continue
+        table_pages.append((label, page))
+    return _deduplicate_table_pages(table_pages)
+
+
+def _deduplicate_table_pages(table_pages):
+    deduplicated = []
+    seen = set()
+    for label, page in table_pages:
+        key = (label, page)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append((label, page))
+    return deduplicated
 
 
 def _room_table_candidates(pdf_path, table_pages):

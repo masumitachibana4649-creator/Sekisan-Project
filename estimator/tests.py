@@ -2,6 +2,7 @@ from decimal import Decimal
 import json
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
@@ -1012,6 +1013,47 @@ class WallpaperEstimateTests(TestCase):
             pages = _detect_table_pages("dummy.pdf")
 
         self.assertEqual(pages, [("室内仕上表", 1), ("内部仕上表", 2), ("建具表", 3)])
+
+    @override_settings(OPENAI_API_KEY="test-key")
+    def test_detect_table_pages_uses_visual_ai_when_text_is_garbled(self):
+        class FakePage:
+            def extract_text(self):
+                return "4 & , * ɹɹ   "
+
+        class FakeReader:
+            pages = [FakePage(), FakePage(), FakePage()]
+
+            def __init__(self, _path):
+                pass
+
+        class FakeFiles:
+            def create(self, file, purpose):
+                return SimpleNamespace(id="file-1")
+
+            def delete(self, file_id):
+                return None
+
+        class FakeResponses:
+            def create(self, **kwargs):
+                return SimpleNamespace(output_text=json.dumps({
+                    "table_pages": [
+                        {"label": "床面積表", "page": 2, "confidence": 0.91},
+                        {"label": "建具表", "page": 3, "confidence": 0.81},
+                    ]
+                }))
+
+        class FakeOpenAI:
+            def __init__(self, api_key):
+                self.files = FakeFiles()
+                self.responses = FakeResponses()
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as pdf_file, patch("pypdf.PdfReader", FakeReader), patch(
+            "openai.OpenAI",
+            FakeOpenAI,
+        ):
+            pages = _detect_table_pages(pdf_file.name)
+
+        self.assertEqual(pages, [("床面積表", 2), ("建具表", 3)])
 
     def test_room_candidate_validation_respects_floor_for_same_room_name(self):
         rooms = [
