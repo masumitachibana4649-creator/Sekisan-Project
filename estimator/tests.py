@@ -16,10 +16,13 @@ from .models import ROOM_TOTAL_METHOD, Project, Room, Wallpaper
 from .pdf_analysis import (
     AnalyzedRoom,
     PdfAnalysisResult,
+    RoomCandidate,
     analyze_wallpaper_pdf,
+    _analysis_page_numbers,
     _analysis_prompt,
     _expected_room_counts,
     _parse_ai_analysis_response,
+    _room_table_candidates_from_text,
     _room_candidate_page_text,
     _sample_plan_rooms,
     _write_selected_pages_pdf,
@@ -878,11 +881,66 @@ class WallpaperEstimateTests(TestCase):
                 "page_development_end": 22,
             },
             expected_counts={"和室": 2, "収納": 3, "台所": 1},
+            table_pages=[("居室区画面積表", 22)],
+            room_candidates=[
+                RoomCandidate("1F", "LDK", Decimal("33.12"), "居室区画面積表", 22),
+                RoomCandidate("2F", "主寝室", Decimal("12.42"), "居室区画面積表", 22),
+            ],
         )
 
         self.assertIn("展開図が読み取りやすい和室A/Bなど一部の部屋だけで回答を終えず", prompt)
         self.assertIn("展開図未確認のため平面図から推定", prompt)
+        self.assertIn("居室区画面積表: 22ページ", prompt)
+        self.assertIn("1F LDK: 33.12m2", prompt)
+        self.assertIn("表ページ候補を優先", prompt)
         self.assertIn("和室: 約2件", prompt)
+
+    def test_living_area_table_candidates_extract_floor_room_and_area(self):
+        text = """
+        居室区画面積表
+        LDK 33.122
+        階段室 1.656
+        ﾊﾟﾝﾄﾘｰ 1.219
+        UB 3.312
+        PS 0.229
+        廊下 7.451
+        主寝室 12.420
+        洋室2 8.797
+        洋室1 8.797
+        ﾌｧﾐﾘｰｸﾛｰｾﾞｯﾄ 6.625
+        ﾄｲﾚ 1.449
+        CL 0.931
+        CL 0.931
+        凡例
+        """
+
+        candidates = [
+            candidate
+            for candidate in _room_table_candidates_from_text(text, "居室区画面積表", 22)
+            if candidate.name != "UB"
+        ]
+
+        self.assertEqual(len(candidates), 12)
+        self.assertEqual(candidates[0], RoomCandidate("1F", "LDK", Decimal("33.12"), "居室区画面積表", 22))
+        self.assertEqual(candidates[3].name, "PS")
+        self.assertEqual(candidates[4].floor, "2F")
+        self.assertEqual(candidates[7].name, "洋室1")
+        self.assertEqual(candidates[8].name, "ファミリークローゼット")
+        self.assertEqual([candidate.name for candidate in candidates[-2:]], ["CL", "CL"])
+
+    def test_analysis_page_numbers_include_detected_table_pages(self):
+        pages = _analysis_page_numbers(
+            {
+                "page_1f_plan": 9,
+                "page_2f_plan": 10,
+                "page_development_start": 11,
+                "page_development_end": 12,
+                "page_1f_ceiling_plan": 6,
+            },
+            additional_pages=[14, 22, 6],
+        )
+
+        self.assertEqual(pages, [9, 10, 6, 11, 12, 14, 22])
 
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
         extracted_room = _parse_ai_analysis_response(json.dumps({

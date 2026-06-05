@@ -4,6 +4,7 @@ import json
 import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 
 try:
@@ -30,6 +31,15 @@ class PdfAnalysisResult:
     missing_rooms: list[str] | None = None
 
 
+@dataclass(frozen=True)
+class RoomCandidate:
+    floor: str
+    name: str
+    area_m2: Decimal | None
+    source: str
+    page: int
+
+
 PAGE_LABELS = {
     "page_1f_plan": "1F平面図",
     "page_2f_plan": "2F平面図",
@@ -44,7 +54,12 @@ PAGE_LABELS = {
 PLAN_PAGE_KEYS = ("page_1f_plan", "page_2f_plan", "page_3f_plan")
 CEILING_PLAN_PAGE_KEYS = ("page_1f_ceiling_plan", "page_2f_ceiling_plan", "page_3f_ceiling_plan")
 ROOM_CANDIDATE_PAGE_KEYS = PLAN_PAGE_KEYS + CEILING_PLAN_PAGE_KEYS
+TABLE_PAGE_KEYWORDS = (
+    ("居室区画面積表", "居室区画面積表"),
+    ("床面積表", "床面積表"),
+)
 NON_WALLPAPER_ROOM_LABELS = ("浴室", "バルコニー")
+NON_WALLPAPER_CANDIDATE_NAMES = ("UB", "浴室", "バルコニー", "ポーチ", "屋外")
 ROOM_LABEL_PATTERNS = {
     "和室": ("和室",),
     "洋室": ("洋室", "子供室", "子供部屋", "主寝室", "寝室"),
@@ -66,9 +81,17 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
         raise ValueError("平面図のページが指定されていません。")
 
     room_candidate_text = _room_candidate_page_text(pdf_path, parsed_pages)
+    table_pages = _detect_table_pages(pdf_path)
+    room_candidates = _room_table_candidates(pdf_path, table_pages)
     expected_counts = _expected_room_counts(room_candidate_text) if room_candidate_text else {}
 
-    ai_result = _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=expected_counts)
+    ai_result = _extract_rooms_with_ai(
+        pdf_path,
+        parsed_pages,
+        expected_counts=expected_counts,
+        table_pages=table_pages,
+        room_candidates=room_candidates,
+    )
     rooms = ai_result["rooms"]
     if not rooms:
         raise ValueError("PDFから計算対象の部屋を抽出できませんでした。")
@@ -82,11 +105,15 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None):
         room_candidate_text=room_candidate_text,
         expected_counts=expected_counts,
         missing_room_count=missing_room_count,
+        missing_rooms=missing_rooms,
+        room_candidates=room_candidates,
     )
 
-    page_summary = "、".join(
+    page_parts = [
         f"{PAGE_LABELS[key]}={value}P" for key, value in parsed_pages.items() if value is not None
-    )
+    ]
+    page_parts.extend(f"{label}={page}P" for label, page in table_pages)
+    page_summary = "、".join(page_parts)
     room_count_summary = (
         f"件数内訳: AI抽出={len(rooms)}件、抽出失敗追加={missing_room_count}件、"
         f"表示合計={len(rooms) + missing_room_count}件。"
@@ -144,7 +171,7 @@ def _parse_page_map(page_map, page_count):
     return parsed
 
 
-def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None):
+def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None, table_pages=None, room_candidates=None):
     api_key = _setting("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY が設定されていないためPDF AI読取を実行できません。")
@@ -159,7 +186,11 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None):
     uploaded_file = None
     selected_pdf_path = None
     try:
-        selected_pdf_path = _write_selected_pages_pdf(pdf_path, parsed_pages)
+        selected_pdf_path = _write_selected_pages_pdf(
+            pdf_path,
+            parsed_pages,
+            additional_pages=[page for _label, page in table_pages or []],
+        )
         with open(selected_pdf_path, "rb") as pdf_file:
             uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
 
@@ -170,7 +201,15 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None):
                     "role": "user",
                     "content": [
                         {"type": "input_file", "file_id": uploaded_file.id},
-                        {"type": "input_text", "text": _analysis_prompt(parsed_pages, expected_counts=expected_counts)},
+                        {
+                            "type": "input_text",
+                            "text": _analysis_prompt(
+                                parsed_pages,
+                                expected_counts=expected_counts,
+                                table_pages=table_pages,
+                                room_candidates=room_candidates,
+                            ),
+                        },
                     ],
                 }
             ],
@@ -197,13 +236,13 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None):
     return _parse_ai_analysis_response(_response_text(response))
 
 
-def _write_selected_pages_pdf(pdf_path, parsed_pages):
+def _write_selected_pages_pdf(pdf_path, parsed_pages, additional_pages=None):
     try:
         from pypdf import PdfReader, PdfWriter
     except ImportError as exc:
         raise ValueError("PDF図面の読取ライブラリがインストールされていません。") from exc
 
-    selected_pages = _analysis_page_numbers(parsed_pages)
+    selected_pages = _analysis_page_numbers(parsed_pages, additional_pages=additional_pages)
     if not selected_pages:
         raise ValueError("AI読取対象の図面ページが指定されていません。")
 
@@ -222,7 +261,7 @@ def _write_selected_pages_pdf(pdf_path, parsed_pages):
         raise ValueError("AI読取用の指定ページPDFを作成できませんでした。") from exc
 
 
-def _analysis_page_numbers(parsed_pages):
+def _analysis_page_numbers(parsed_pages, additional_pages=None):
     selected_pages = []
     development_start = parsed_pages.get("page_development_start")
     development_end = parsed_pages.get("page_development_end")
@@ -235,20 +274,31 @@ def _analysis_page_numbers(parsed_pages):
         for page_number in range(development_start, development_end + 1):
             if page_number not in selected_pages:
                 selected_pages.append(page_number)
+    for page_number in additional_pages or []:
+        if page_number and page_number not in selected_pages:
+            selected_pages.append(page_number)
     return selected_pages
 
 
-def _analysis_prompt(parsed_pages, expected_counts=None):
+def _analysis_prompt(parsed_pages, expected_counts=None, table_pages=None, room_candidates=None):
     page_lines = "\n".join(
         f"- {PAGE_LABELS[key]}: {value}ページ" for key, value in parsed_pages.items() if value is not None
     )
+    table_page_lines = _table_page_prompt_lines(table_pages)
+    room_candidate_lines = _room_candidate_prompt_lines(room_candidates)
     expected_room_lines = _expected_room_prompt_lines(expected_counts)
     return f"""
 添付PDFは壁紙積算用の建築図面です。以下の指定ページだけを主な根拠にして、クロス施工対象の部屋を抽出してください。
 
 {page_lines}
 
-平面図・天井伏図テキストから検出した室名候補:
+自動検出した表ページ:
+{table_page_lines}
+
+表ページから検出した部屋候補:
+{room_candidate_lines}
+
+平面図・天井伏図テキストから検出した補助室名候補:
 {expected_room_lines}
 
 抽出対象:
@@ -266,8 +316,10 @@ def _analysis_prompt(parsed_pages, expected_counts=None):
 - C.H、CH、天井高が読める場合は height_m に反映してください。
 - 天井高が部屋ごとに読めない場合は、図面内の標準天井高を使ってください。
 - 壁紙対象外と判断できる浴室、バルコニー、屋外部分は除外してください。
+- 表ページから検出した部屋候補がある場合は、その候補リストを部屋一覧の主根拠として全件確認してください。
+- 表ページ候補のうち、浴室・UB・バルコニー・ポーチ・屋外部分以外は、面積や開口部が推定でも rooms または missing_rooms のどちらかに必ず含めてください。
 - 平面図上に見える室名は必ず一度すべて洗い出し、浴室・バルコニー・屋外部分以外は原則としてroomsに含めてください。
-- 上記の室名候補は抽出漏れチェックに使います。平面図を部屋一覧の正とし、天井伏図の室名候補も補助根拠として確認してください。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
+- 上記の補助室名候補は抽出漏れチェックに使います。表ページ候補を優先し、平面図と天井伏図の室名候補も補助根拠として確認してください。候補にある主要室、特にLDK、洋室、主寝室、トイレ、洗面所、脱衣、ランドリーは必ずroomsに含めてください。
 - roomsに入れるだけの面積・開口部情報をどうしても抽出できない室名候補は、missing_rooms に「階 部屋名」の形式で入れてください。missing_roomsにはroomsに入れた部屋名を重複して入れないでください。
 - missing_rooms は浴室・バルコニー・屋外部分を除外し、クロス施工対象だが面積入力が必要な部屋だけにしてください。
 - 和室、台所、食堂、便所、物入、押入、納戸、子供室、寝室など旧来表記の部屋名も通常のクロス施工対象として扱ってください。
@@ -301,6 +353,23 @@ def _expected_room_prompt_lines(expected_counts):
     if not expected_counts:
         return "- なし"
     return "\n".join(f"- {label}: 約{count}件" for label, count in expected_counts.items())
+
+
+def _table_page_prompt_lines(table_pages):
+    if not table_pages:
+        return "- なし"
+    return "\n".join(f"- {label}: {page}ページ" for label, page in table_pages)
+
+
+def _room_candidate_prompt_lines(room_candidates):
+    if not room_candidates:
+        return "- なし"
+    lines = []
+    for candidate in room_candidates:
+        area = f"{candidate.area_m2}m2" if candidate.area_m2 is not None else "面積不明"
+        floor = candidate.floor or "階不明"
+        lines.append(f"- {floor} {candidate.name}: {area}（{candidate.source} {candidate.page}P）")
+    return "\n".join(lines)
 
 
 def _analysis_schema():
@@ -437,10 +506,15 @@ def _validate_room_extraction(
     room_candidate_text=None,
     expected_counts=None,
     missing_room_count=0,
+    missing_rooms=None,
+    room_candidates=None,
 ):
     room_candidate_text = (
         room_candidate_text if room_candidate_text is not None else _room_candidate_page_text(pdf_path, parsed_pages)
     )
+    room_candidates = room_candidates or []
+    if room_candidates:
+        return _validate_room_candidates(rooms, missing_rooms or [], room_candidates)
     if not room_candidate_text:
         return []
 
@@ -483,6 +557,42 @@ def _validate_room_extraction(
     return [f"平面図・天井伏図上の室名候補に対し、未抽出の可能性があります: {missing_summary}。"]
 
 
+def _validate_room_candidates(rooms, missing_rooms, room_candidates):
+    displayed = set()
+    for room in rooms:
+        displayed.update(_room_match_keys(room.name))
+    for room_name in missing_rooms or []:
+        displayed.update(_room_match_keys(room_name))
+    missing_candidates = [
+        candidate
+        for candidate in room_candidates
+        if _normalize_room_name(candidate.name) and not (_candidate_match_keys(candidate) & displayed)
+    ]
+    if not missing_candidates:
+        return []
+
+    expected_total = len(room_candidates)
+    ai_total = len(rooms)
+    missing_total = _missing_room_count(missing_rooms, rooms)
+    display_total = ai_total + missing_total
+    missing_summary = "、".join(_candidate_label(candidate) for candidate in missing_candidates[:12])
+    if len(missing_candidates) > 12:
+        missing_summary += f"、ほか{len(missing_candidates) - 12}件"
+    return [
+        "PDF AI読取の部屋抽出数が不足している可能性があります。"
+        f"表ページ上の部屋候補は{expected_total}件、"
+        f"AI抽出は{ai_total}件、抽出失敗追加は{missing_total}件、"
+        f"表示合計は{display_total}件です。"
+        f"未表示候補: {missing_summary}。"
+        "積算結果を確認し、必要に応じて編集で部屋・面積を補正してください。"
+    ]
+
+
+def _candidate_label(candidate):
+    floor = f"{candidate.floor} " if candidate.floor else ""
+    return f"{floor}{candidate.name}"
+
+
 def _missing_only_secondary_spaces(missing):
     return bool(missing) and set(missing).issubset({"収納", "廊下", "玄関"})
 
@@ -513,19 +623,214 @@ def _page_text_for_keys(pdf_path, parsed_pages, page_keys):
         return ""
 
 
+def _detect_table_pages(pdf_path):
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(pdf_path))
+    except Exception:
+        return []
+
+    table_pages = []
+    seen = set()
+    for index, page in enumerate(reader.pages, start=1):
+        text = page.extract_text() or ""
+        for label, keyword in TABLE_PAGE_KEYWORDS:
+            if keyword in text and _is_supported_table_page(text, label) and (label, index) not in seen:
+                table_pages.append((label, index))
+                seen.add((label, index))
+    return table_pages
+
+
+def _room_table_candidates(pdf_path, table_pages):
+    if not table_pages:
+        return []
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(pdf_path))
+    except Exception:
+        return []
+
+    for preferred_label in ("居室区画面積表", "床面積表"):
+        candidates = []
+        for label, page_number in table_pages:
+            if label != preferred_label:
+                continue
+            text = reader.pages[page_number - 1].extract_text() or ""
+            candidates.extend(_room_table_candidates_from_text(text, label, page_number))
+        candidates = [
+            candidate
+            for candidate in candidates
+            if _normalize_room_name(candidate.name) and not _is_non_wallpaper_candidate(candidate.name)
+        ]
+        if candidates:
+            return candidates
+    return []
+
+
+def _room_table_candidates_from_text(text, source, page_number):
+    if source == "床面積表":
+        return _floor_area_table_candidates(text, source, page_number)
+    if source == "居室区画面積表":
+        return _living_area_table_candidates(text, source, page_number)
+    return []
+
+
+def _floor_area_table_candidates(text, source, page_number):
+    section = _table_section(text, "床面積表")
+    if not section:
+        return []
+
+    candidates = []
+    floor = "1F"
+    switch_after_1f_total = False
+    for line in section.splitlines():
+        if "1階小計" in line:
+            switch_after_1f_total = True
+            continue
+        if "2階小計" in line or "延床面積" in line:
+            break
+        line_candidates = _room_candidates_from_line(line, floor, source, page_number)
+        if switch_after_1f_total and line_candidates and not any(_normalize_room_name(candidate.name) == "PS" for candidate in line_candidates):
+            floor = "2F"
+            line_candidates = _room_candidates_from_line(line, floor, source, page_number)
+            switch_after_1f_total = False
+        candidates.extend(line_candidates)
+        if switch_after_1f_total and any(_normalize_room_name(candidate.name) == "PS" for candidate in line_candidates):
+            floor = "2F"
+            switch_after_1f_total = False
+    return candidates
+
+
+def _living_area_table_candidates(text, source, page_number):
+    section = _table_section(text, "居室区画面積表")
+    if not section:
+        return []
+
+    raw_candidates = []
+    for line in section.splitlines():
+        if "凡例" in line or "合計" in line:
+            break
+        raw_candidates.extend(_room_candidates_from_line(line, "", source, page_number))
+
+    return _infer_floors_for_living_area_candidates(raw_candidates)
+
+
+def _table_section(text, marker):
+    start = text.find(marker)
+    if start < 0:
+        return ""
+    return text[start:]
+
+
+def _room_candidates_from_line(line, floor, source, page_number):
+    candidates = []
+    line = unicodedata.normalize("NFKC", line)
+    normalized = _normalize_text(line)
+    if any(skip in normalized for skip in ("小計", "延床面積", "合計", "凡例", "計算式", "面積", "タイプ")):
+        return candidates
+    pattern = re.compile(r"([A-Za-zＡ-Ｚａ-ｚ一-龥ァ-ヶｦ-ﾟー０-９0-9]+(?:[ 　]*[A-Za-zＡ-Ｚａ-ｚ一-龥ァ-ヶｦ-ﾟー０-９0-9]+)*)\s+(\d+\.\d{3})")
+    for match in pattern.finditer(line):
+        name = _normalize_room_display_name(match.group(1))
+        area = _decimal_from_ai(match.group(2), "0")
+        if not name or area <= 0:
+            continue
+        candidates.append(RoomCandidate(floor=floor, name=name, area_m2=area, source=source, page=page_number))
+    return candidates
+
+
+def _infer_floors_for_living_area_candidates(candidates):
+    if not candidates:
+        return []
+    inferred = []
+    floor = "1F"
+    for candidate in candidates:
+        inferred.append(
+            RoomCandidate(
+                floor=floor,
+                name=candidate.name,
+                area_m2=candidate.area_m2,
+                source=candidate.source,
+                page=candidate.page,
+            )
+        )
+        if floor == "1F" and _normalize_room_name(candidate.name) == "PS":
+            floor = "2F"
+    return inferred
+
+
+def _normalize_room_display_name(value):
+    name = unicodedata.normalize("NFKC", str(value or "")).strip()
+    name = re.sub(r"^[0-9０-９.,，×＝=\-+\s]+", "", name)
+    name = name.translate(str.maketrans({
+        "ﾎ": "ホ",
+        "ｰ": "ー",
+    }))
+    replacements = {
+        "ﾄｲﾚ": "トイレ",
+        "ﾎｰﾙ": "ホール",
+        "ﾊﾟﾝﾄﾘｰ": "パントリー",
+        "ﾗﾝﾄﾞﾘｰﾙｰﾑ": "ランドリールーム",
+        "ﾌｧﾐﾘｰｸﾛｰｾﾞｯﾄ": "ファミリークローゼット",
+        "脱衣ﾗﾝﾄﾞﾘｰﾙｰﾑ": "脱衣ランドリールーム",
+    }
+    for source, target in replacements.items():
+        name = name.replace(source, target)
+    return name.strip()
+
+
+def _is_supported_table_page(text, label):
+    normalized = unicodedata.normalize("NFKC", text)
+    if label == "居室区画面積表":
+        return "部 屋" in normalized or "部屋" in normalized
+    if label == "床面積表":
+        return "部屋" in normalized and ("小計" in normalized or "非居室" in normalized)
+    return False
+
+
+def _is_non_wallpaper_candidate(name):
+    normalized = _normalize_room_name(name)
+    return any(_normalize_room_name(excluded) in normalized for excluded in NON_WALLPAPER_CANDIDATE_NAMES)
+
+
 def _missing_room_count(missing_rooms, analyzed_rooms):
-    extracted = {_normalize_room_name(room.name) for room in analyzed_rooms}
+    extracted = set()
+    for room in analyzed_rooms:
+        extracted.update(_room_match_keys(room.name))
     seen = set()
     for room_name in missing_rooms or []:
         normalized = _normalize_room_name(room_name)
-        if not normalized or normalized in extracted:
+        if not normalized or _room_match_keys(room_name) & extracted:
             continue
         seen.add(normalized)
     return len(seen)
 
 
 def _normalize_room_name(value):
-    return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789")).upper().replace(" ", "")
+    return unicodedata.normalize("NFKC", str(value or "")).upper().replace(" ", "")
+
+
+def _normalize_floor(value):
+    normalized = unicodedata.normalize("NFKC", str(value or "")).upper().strip()
+    match = re.search(r"([1-9])\s*(?:F|階)", normalized)
+    return f"{match.group(1)}F" if match else normalized
+
+
+def _room_match_keys(value):
+    normalized = _normalize_room_name(value)
+    keys = {normalized} if normalized else set()
+    without_floor = re.sub(r"^[1-9](?:F|階)", "", normalized)
+    if without_floor:
+        keys.add(without_floor)
+    return keys
+
+
+def _candidate_match_keys(candidate):
+    keys = _room_match_keys(candidate.name)
+    if candidate.floor:
+        keys.add(_normalize_room_name(f"{candidate.floor} {candidate.name}"))
+    return keys
 
 
 def _expected_room_counts(plan_text):
