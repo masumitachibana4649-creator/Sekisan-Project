@@ -538,7 +538,7 @@ textarea { resize: vertical; }
   z-index: 1;
   background: var(--panel);
   min-width: 1720px;
-  column-gap: 0.5em;
+  column-gap: 1em;
 }
 
 .result-head span:nth-child(n+4):not(:last-child) {
@@ -554,7 +554,7 @@ textarea { resize: vertical; }
 
 .room-detail-group {
   margin-top: 10px;
-  row-gap: 4px;
+  row-gap: 6px;
 }
 
 .room-wallpaper-cell select {
@@ -584,8 +584,27 @@ textarea { resize: vertical; }
   text-align: right;
 }
 
+.room-area-label {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.room-opening-label {
+  grid-row: 3;
+}
+
 .room-measure-cell {
   text-align: right;
+}
+
+.room-area-measure,
+.room-area-spacer {
+  grid-row: 2;
+}
+
+.room-opening-label ~ .room-measure-cell,
+.room-opening-spacer {
+  grid-row: 3;
 }
 
 .room-detail-group input {
@@ -606,7 +625,8 @@ textarea { resize: vertical; }
 
 .room-exclude-cell {
   display: inline-flex;
-  grid-column: 1 / span 3;
+  grid-column: 1 / span 2;
+  grid-row: 2;
   align-items: center;
   gap: 6px;
   color: var(--muted);
