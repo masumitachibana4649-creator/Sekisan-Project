@@ -94,6 +94,8 @@ def _send(url, method, headers, data=None, expect_json=True):
         raise SupabaseStorageError(f"Supabase Storage APIエラー: {exc.code} {detail}") from exc
     except error.URLError as exc:
         raise SupabaseStorageError(f"Supabase Storageへ接続できませんでした: {exc.reason}") from exc
+    except (TimeoutError, OSError) as exc:
+        raise SupabaseStorageError(f"Supabase Storageへの通信でエラーが発生しました: {exc}") from exc
 
     if not expect_json:
         return body

@@ -101,25 +101,30 @@ def project_create(request):
 
         surface_wallpapers = _posted_surface_wallpapers(request.POST, default_wallpaper)
         first_wallpaper = surface_wallpapers["east"]
-        project = Project.objects.create(
-            name=request.POST.get("name") or "無題の積算",
-            client_name=request.POST.get("client_name", ""),
-            wallpaper_roll_width_m=first_wallpaper.roll_width_m,
-            wallpaper_roll_length_m=first_wallpaper.roll_length_m,
-            loss_rate_percent=first_wallpaper.loss_rate_percent,
-            unit_price_per_roll=first_wallpaper.unit_price_per_roll,
-            uploaded_by=request.user if request.user.is_authenticated else None,
-            page_1f_plan=_page_value(request.POST.get("page_1f_plan"), "ー"),
-            page_2f_plan=_page_value(request.POST.get("page_2f_plan"), "ー"),
-            page_3f_plan=_page_value(request.POST.get("page_3f_plan"), "ー"),
-            page_development_start=_page_value(request.POST.get("page_development_start"), "ー"),
-            page_development_end=_page_value(request.POST.get("page_development_end"), "ー"),
-            page_1f_ceiling_plan=_page_value(request.POST.get("page_1f_ceiling_plan"), "ー"),
-            page_2f_ceiling_plan=_page_value(request.POST.get("page_2f_ceiling_plan"), "ー"),
-            page_3f_ceiling_plan=_page_value(request.POST.get("page_3f_ceiling_plan"), "ー"),
-            memo=request.POST.get("memo", ""),
-            **pdf_fields,
-        )
+        try:
+            project = Project.objects.create(
+                name=request.POST.get("name") or "無題の積算",
+                client_name=request.POST.get("client_name", ""),
+                wallpaper_roll_width_m=first_wallpaper.roll_width_m,
+                wallpaper_roll_length_m=first_wallpaper.roll_length_m,
+                loss_rate_percent=first_wallpaper.loss_rate_percent,
+                unit_price_per_roll=first_wallpaper.unit_price_per_roll,
+                uploaded_by=request.user if request.user.is_authenticated else None,
+                page_1f_plan=_page_value(request.POST.get("page_1f_plan"), "ー"),
+                page_2f_plan=_page_value(request.POST.get("page_2f_plan"), "ー"),
+                page_3f_plan=_page_value(request.POST.get("page_3f_plan"), "ー"),
+                page_development_start=_page_value(request.POST.get("page_development_start"), "ー"),
+                page_development_end=_page_value(request.POST.get("page_development_end"), "ー"),
+                page_1f_ceiling_plan=_page_value(request.POST.get("page_1f_ceiling_plan"), "ー"),
+                page_2f_ceiling_plan=_page_value(request.POST.get("page_2f_ceiling_plan"), "ー"),
+                page_3f_ceiling_plan=_page_value(request.POST.get("page_3f_ceiling_plan"), "ー"),
+                memo=request.POST.get("memo", ""),
+                **pdf_fields,
+            )
+        except Exception as exc:
+            logger.exception("Project creation failed during PDF estimate upload")
+            messages.error(request, f"積算データを作成できませんでした。理由: {exc}")
+            return redirect("project_create")
 
         if _read_pdf_into_project(request, project, surface_wallpapers=surface_wallpapers):
             messages.success(request, "PDF図面から部屋情報を読み取り、積算を作成しました。")
