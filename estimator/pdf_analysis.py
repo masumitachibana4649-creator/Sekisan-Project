@@ -699,10 +699,10 @@ def _detect_table_pages_with_ai(pdf_path, page_count):
     except ImportError:
         return []
 
-    model = _setting("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
-    client = OpenAI(api_key=_setting("OPENAI_API_KEY"))
     uploaded_file = None
     try:
+        model = _setting("OPENAI_PDF_ANALYSIS_MODEL", "gpt-4o")
+        client = OpenAI(api_key=_setting("OPENAI_API_KEY"))
         with open(pdf_path, "rb") as pdf_file:
             uploaded_file = client.files.create(file=pdf_file, purpose="user_data")
         response = client.responses.create(
