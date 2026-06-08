@@ -78,14 +78,18 @@ ROOM_LABEL_PATTERNS = {
 }
 
 
-def analyze_wallpaper_pdf(pdf_path, page_map=None):
+def analyze_wallpaper_pdf(pdf_path, page_map=None, table_pages=None, allow_visual_table_detection=True):
     page_count = _pdf_page_count(pdf_path)
     parsed_pages = _parse_page_map(page_map or {}, page_count)
     if not parsed_pages.get("page_1f_plan") and not parsed_pages.get("page_2f_plan") and not parsed_pages.get("page_3f_plan"):
         raise ValueError("平面図のページが指定されていません。")
 
     room_candidate_text = _room_candidate_page_text(pdf_path, parsed_pages)
-    table_pages = _detect_table_pages(pdf_path)
+    table_pages = (
+        _deduplicate_table_pages(table_pages)
+        if table_pages is not None
+        else _detect_table_pages(pdf_path, allow_visual_detection=allow_visual_table_detection)
+    )
     room_candidates = _room_table_candidates(pdf_path, table_pages)
     expected_counts = _expected_room_counts(room_candidate_text) if room_candidate_text else {}
 
@@ -646,7 +650,7 @@ def _page_text_for_keys(pdf_path, parsed_pages, page_keys):
         return ""
 
 
-def _detect_table_pages(pdf_path):
+def _detect_table_pages(pdf_path, allow_visual_detection=True):
     try:
         from pypdf import PdfReader
 
@@ -664,9 +668,32 @@ def _detect_table_pages(pdf_path):
             if keyword in text and _is_supported_table_page(text, label) and (label, index) not in seen:
                 table_pages.append((label, index))
                 seen.add((label, index))
-    if not table_pages and _should_use_visual_table_detection(extracted_texts):
+    if not table_pages:
+        table_pages.extend(_detect_garbled_table_pages(extracted_texts))
+    if allow_visual_detection and not table_pages and _should_use_visual_table_detection(extracted_texts):
         table_pages.extend(_detect_table_pages_with_ai(pdf_path, len(reader.pages)))
     return _deduplicate_table_pages(table_pages)
+
+
+def _detect_garbled_table_pages(extracted_texts):
+    table_pages = []
+    for index, text in enumerate(extracted_texts, start=1):
+        normalized = unicodedata.normalize("NFKC", text or "")
+        if _looks_like_garbled_fixture_table(normalized):
+            table_pages.append(("建具表", index))
+        elif _looks_like_garbled_finish_table(normalized):
+            table_pages.append(("室内仕上表", index))
+    return table_pages
+
+
+def _looks_like_garbled_fixture_table(text):
+    return "਺ྔ" in text and "ੇ๏" in text and text.count("਺ྔ") >= 2
+
+
+def _looks_like_garbled_finish_table(text):
+    finish_markers = ("έΠΧϧ൘", "̥ɾ̗", "Լ԰", "্ද")
+    floor_area_markers = ("̍֊চ໘ੵ", "̎֊চ໘ੵ", "Ԇচ໘ੵ")
+    return any(marker in text for marker in finish_markers) and any(marker in text for marker in floor_area_markers)
 
 
 def _should_use_visual_table_detection(extracted_texts):
@@ -685,7 +712,7 @@ def _should_use_visual_table_detection(extracted_texts):
 def _detect_table_pages_with_ai(pdf_path, page_count):
     if not _setting("OPENAI_API_KEY"):
         return []
-    if str(_setting("OPENAI_VISUAL_TABLE_PAGE_DETECTION", "true")).lower() in {"0", "false", "no", "off"}:
+    if str(_setting("OPENAI_VISUAL_TABLE_PAGE_DETECTION", "false")).lower() not in {"1", "true", "yes", "on"}:
         return []
     try:
         max_pages = int(_setting("OPENAI_TABLE_PAGE_DETECTION_MAX_PAGES", "60"))

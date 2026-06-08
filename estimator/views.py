@@ -32,7 +32,7 @@ from .models import (
     Room,
     Wallpaper,
 )
-from .pdf_analysis import analyze_wallpaper_pdf
+from .pdf_analysis import TABLE_PAGE_KEYWORDS, analyze_wallpaper_pdf
 from . import storage
 
 logger = logging.getLogger(__name__)
@@ -686,7 +686,12 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
     try:
         close_old_connections()
         with _drawing_pdf_path(project) as pdf_path:
-            analysis = analyze_wallpaper_pdf(pdf_path, _project_page_map(project))
+            analysis = analyze_wallpaper_pdf(
+                pdf_path,
+                _project_page_map(project),
+                table_pages=_project_table_pages_from_memo(project.memo) if replace_rooms else None,
+                allow_visual_table_detection=not replace_rooms,
+            )
         if replace_rooms:
             project.rooms.all().delete()
         _create_rooms_from_analysis(
@@ -708,6 +713,22 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
     finally:
         close_old_connections()
     return False
+
+
+def _project_table_pages_from_memo(memo):
+    if not memo:
+        return None
+    table_labels = tuple(label for label, _keyword in TABLE_PAGE_KEYWORDS)
+    pattern = re.compile(rf"({'|'.join(re.escape(label) for label in table_labels)})=(\d+)P")
+    pages = []
+    seen = set()
+    for label, page in pattern.findall(memo):
+        item = (label, int(page))
+        if item in seen:
+            continue
+        seen.add(item)
+        pages.append(item)
+    return pages or None
 
 
 def _is_estimated_opening(room):

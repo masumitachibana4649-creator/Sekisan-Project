@@ -33,6 +33,7 @@ from .pdf_analysis import (
 )
 from .views import _create_rooms_from_analysis
 from .views import _create_room_from_analysis
+from .views import _project_table_pages_from_memo
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
@@ -1015,7 +1016,29 @@ class WallpaperEstimateTests(TestCase):
 
         self.assertEqual(pages, [("室内仕上表", 1), ("内部仕上表", 2), ("建具表", 3)])
 
-    @override_settings(OPENAI_API_KEY="test-key")
+    def test_detect_table_pages_includes_garbled_finish_and_fixture_tables_without_ai(self):
+        class FakePage:
+            def __init__(self, text):
+                self.text = text
+
+            def extract_text(self):
+                return self.text
+
+        class FakeReader:
+            pages = [
+                FakePage("έΠΧϧ൘ ̥ɾ̗ Լ԰ ্ද ̍֊চ໘ੵ ̎֊চ໘ੵ Ԇচ໘ੵ"),
+                FakePage("਺ྔ ࣜ ঢ়ɹੇ๏ ੇ๏ ࢠ ෺ ߟ ਺ྔ ࣜ ঢ়ɹੇ๏"),
+            ]
+
+            def __init__(self, _path):
+                pass
+
+        with patch("pypdf.PdfReader", FakeReader):
+            pages = _detect_table_pages("dummy.pdf")
+
+        self.assertEqual(pages, [("室内仕上表", 1), ("建具表", 2)])
+
+    @override_settings(OPENAI_API_KEY="test-key", OPENAI_VISUAL_TABLE_PAGE_DETECTION="true")
     def test_detect_table_pages_uses_visual_ai_when_text_is_garbled(self):
         class FakePage:
             def extract_text(self):
@@ -1112,6 +1135,17 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(created.height_m, Decimal("999.99"))
         self.assertEqual(created.opening_area_m2, Decimal("99999.99"))
         self.assertEqual(created.ceiling_area_m2, Decimal("99999.99"))
+
+    def test_project_table_pages_from_memo_reuses_detected_tables(self):
+        memo = (
+            "PDF AI読取: 1F平面図=5P、2F平面図=5P、"
+            "室内仕上表=4P、建具表=10P、建具表=11P、建具表=10P。"
+        )
+
+        self.assertEqual(
+            _project_table_pages_from_memo(memo),
+            [("室内仕上表", 4), ("建具表", 10), ("建具表", 11)],
+        )
 
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
         extracted_room = _parse_ai_analysis_response(json.dumps({
