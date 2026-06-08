@@ -43,6 +43,10 @@ SECRET_KEY = os.environ.get(
 DEBUG = env_bool("DEBUG", True)
 
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "127.0.0.1,localhost")
+if DEBUG:
+    for local_host in ("127.0.0.1", "localhost"):
+        if local_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(local_host)
 RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
