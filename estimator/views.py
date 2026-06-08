@@ -421,24 +421,28 @@ def _create_rooms_from_analysis(
 def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpaper):
     created = Room(
         project=project,
-        name=room.name,
+        name=_truncate_text(room.name, Room._meta.get_field("name").max_length),
         source_type=ROOM_SOURCE_AI,
-        perimeter_m=room.perimeter_m,
-        height_m=room.height_m,
-        opening_area_m2=room.opening_area_m2,
-        ceiling_area_m2=room.ceiling_area_m2,
-        note=room.note,
+        perimeter_m=_room_measurement(room.perimeter_m, max_value=Decimal("99999.99")),
+        height_m=_room_measurement(room.height_m, max_value=Decimal("999.99")),
+        opening_area_m2=_room_measurement(room.opening_area_m2, max_value=Decimal("99999.99")),
+        ceiling_area_m2=_room_measurement(room.ceiling_area_m2, max_value=Decimal("99999.99")),
+        note=_truncate_text(room.note, Room._meta.get_field("note").max_length),
     )
     for field, _label, _surface_type in SURFACE_FIELDS:
         created.apply_wallpaper(field, surface_wallpapers.get(field, default_wallpaper))
     if room.wall_surfaces:
         for field, _label, surface_type in SURFACE_FIELDS:
             if surface_type == "ceiling":
-                created.ceiling_surface_area_m2 = room.ceiling_area_m2
+                created.ceiling_surface_area_m2 = created.ceiling_area_m2
                 continue
             surface = _wall_surface_value(room.wall_surfaces, field)
-            setattr(created, f"{field}_surface_area_m2", _wall_surface_area(surface, room.height_m))
-            setattr(created, f"{field}_opening_area_m2", surface.get("opening_area_m2", Decimal("0")))
+            setattr(created, f"{field}_surface_area_m2", _wall_surface_area(surface, created.height_m))
+            setattr(
+                created,
+                f"{field}_opening_area_m2",
+                _room_measurement(surface.get("opening_area_m2", Decimal("0")), max_value=Decimal("99999.99")),
+            )
         created.sync_totals_from_surface_measurements()
     else:
         created.set_default_surface_measurements()
@@ -448,13 +452,13 @@ def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpa
 def _create_empty_room(project, name, source_type, note, default_wallpaper, surface_wallpapers=None, ceiling_area_m2=Decimal("0")):
     room = Room(
         project=project,
-        name=name,
+        name=_truncate_text(name, Room._meta.get_field("name").max_length),
         source_type=source_type,
         perimeter_m=Decimal("0"),
         height_m=Decimal("0"),
         opening_area_m2=Decimal("0"),
-        ceiling_area_m2=ceiling_area_m2,
-        note=note,
+        ceiling_area_m2=_room_measurement(ceiling_area_m2, max_value=Decimal("99999.99")),
+        note=_truncate_text(note, Room._meta.get_field("note").max_length),
     )
     if surface_wallpapers:
         for field, _label, _surface_type in SURFACE_FIELDS:
@@ -599,8 +603,25 @@ def _wall_surface_value(wall_surfaces, field):
 def _wall_surface_area(surface, height_m):
     width = surface.get("width_m", Decimal("0"))
     if width > 0:
-        return (width * height_m).quantize(Decimal("0.01"))
-    return surface.get("surface_area_m2", Decimal("0"))
+        return _room_measurement(width * height_m, max_value=Decimal("99999.99"))
+    return _room_measurement(surface.get("surface_area_m2", Decimal("0")), max_value=Decimal("99999.99"))
+
+
+def _room_measurement(value, max_value):
+    try:
+        measurement = Decimal(str(value if value is not None else "0")).quantize(Decimal("0.01"))
+    except Exception:
+        return Decimal("0")
+    if not measurement.is_finite() or measurement < 0:
+        return Decimal("0")
+    return min(measurement, max_value)
+
+
+def _truncate_text(value, max_length):
+    text = str(value or "").strip()
+    if max_length and len(text) > max_length:
+        return text[:max_length]
+    return text
 
 
 def _validate_drawing_pdf(uploaded_file):

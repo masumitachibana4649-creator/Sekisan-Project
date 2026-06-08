@@ -32,6 +32,7 @@ from .pdf_analysis import (
     _write_selected_pages_pdf,
 )
 from .views import _create_rooms_from_analysis
+from .views import _create_room_from_analysis
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
@@ -1083,6 +1084,34 @@ class WallpaperEstimateTests(TestCase):
 
         self.assertNotIn("1F 収納", warnings[0])
         self.assertIn("2F CL", warnings[0])
+
+    def test_create_room_from_analysis_clamps_ai_values_to_db_limits(self):
+        project = Project.objects.create(name="AI値丸め")
+        wallpaper = Wallpaper.objects.get(number="001")
+        room = AnalyzedRoom(
+            name="1F " + ("長い部屋名" * 30),
+            perimeter_m=Decimal("123456789.12"),
+            height_m=Decimal("12345.67"),
+            opening_area_m2=Decimal("-5"),
+            ceiling_area_m2=Decimal("123456789.12"),
+            note="根拠: " + ("長い備考" * 80),
+            wall_surfaces={
+                "face_1": {"width_m": Decimal("999999.99"), "surface_area_m2": Decimal("999999.99"), "opening_area_m2": Decimal("999999.99")},
+                "face_2": {"width_m": Decimal("0"), "surface_area_m2": Decimal("123456789.12"), "opening_area_m2": Decimal("-1")},
+                "face_3": {"width_m": Decimal("0"), "surface_area_m2": Decimal("-1"), "opening_area_m2": Decimal("0")},
+                "face_4": {"width_m": Decimal("0"), "surface_area_m2": Decimal("1"), "opening_area_m2": Decimal("0")},
+            },
+        )
+
+        _create_room_from_analysis(project, room, {}, wallpaper)
+
+        created = project.rooms.get()
+        self.assertLessEqual(len(created.name), 80)
+        self.assertLessEqual(len(created.note), 160)
+        self.assertEqual(created.perimeter_m, Decimal("99999.99"))
+        self.assertEqual(created.height_m, Decimal("999.99"))
+        self.assertEqual(created.opening_area_m2, Decimal("99999.99"))
+        self.assertEqual(created.ceiling_area_m2, Decimal("99999.99"))
 
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
         extracted_room = _parse_ai_analysis_response(json.dumps({
