@@ -42,8 +42,6 @@ class StaffAwareLoginView(LoginView):
     template_name = "registration/login.html"
 
     def get_success_url(self):
-        if self.request.user.is_staff or self.request.user.is_superuser:
-            return "/admin/"
         return self.get_redirect_url() or reverse("dashboard")
 
 
@@ -77,6 +75,10 @@ def dashboard(request):
         "latest": latest,
     }
     return render(request, "estimator/dashboard.html", context)
+
+
+def about(request):
+    return render(request, "estimator/about.html")
 
 
 @login_required

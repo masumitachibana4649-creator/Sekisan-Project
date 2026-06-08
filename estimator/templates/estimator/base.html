@@ -17,6 +17,9 @@
       <span>壁紙積算システム</span>
     </a>
     <nav class="top-actions">
+      {% if request.resolver_match.url_name != "about" %}
+        <a class="icon-link ghost" href="{% url 'about' %}" aria-label="このサイトについて">このサイトについて</a>
+      {% endif %}
       {% if request.user.is_authenticated %}
         <span class="user-label">{{ request.user.username }}</span>
         <form class="logout-form" method="post" action="{% url 'logout' %}">

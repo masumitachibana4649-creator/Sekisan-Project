@@ -1,0 +1,70 @@
+{% extends "estimator/base.html" %}
+{% load static %}
+{% block title %}このサイトについて | 壁紙積算システム{% endblock %}
+
+{% block content %}
+<section class="content-band about-hero" style="background: linear-gradient(rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.84)), url('{% static "estimator/dashboard-wallpaper-no2.png" %}') center / cover;">
+  <div class="page-kicker">このサイトについて</div>
+  <h1 style="max-width: 980px; font-size: 33px !important; line-height: 1.25;">壁紙工事の積算作業を、図面からすばやく整理します</h1>
+  <p>
+    このサイトは、PDF図面をもとに壁紙の必要面積・ロール本数・概算金額を算出し、
+    案件ごとの積算結果を保存できるWebシステムです。
+  </p>
+</section>
+
+<section class="content-band about-section">
+  <div class="section-heading">
+    <div>
+      <h2>このサイトでできること</h2>
+    </div>
+  </div>
+  <ul class="about-list">
+    <li>PDF図面を登録して、壁紙の必要面積を積算できます。</li>
+    <li>部屋ごとの壁面・天井面積を確認できます。</li>
+    <li>壁紙ロール本数と概算金額を算出できます。</li>
+    <li>積算結果をCSVで出力できます。</li>
+  </ul>
+</section>
+
+<section class="content-band about-section">
+  <div class="section-heading">
+    <div>
+      <h2>使い方</h2>
+    </div>
+  </div>
+  <ol class="about-steps">
+    <li>案件名・顧客名を入力します。</li>
+    <li>図面PDFをアップロードします。</li>
+    <li>読み取った部屋情報を確認します。</li>
+    <li>壁紙種類や面積を必要に応じて調整します。</li>
+    <li>見積結果を保存・CSV出力します。</li>
+  </ol>
+</section>
+
+<section class="content-band about-section">
+  <div class="section-heading">
+    <div>
+      <h2>このサイトの目的</h2>
+    </div>
+  </div>
+  <ul class="about-list">
+    <li>壁紙積算の手間を減らします。</li>
+    <li>手入力ミスを減らします。</li>
+    <li>案件ごとの見積履歴を残します。</li>
+    <li>PDF図面からの積算作業を効率化します。</li>
+  </ul>
+</section>
+
+<section class="content-band about-section">
+  <div class="section-heading">
+    <div>
+      <h2>注意点</h2>
+    </div>
+  </div>
+  <ul class="about-list">
+    <li>PDFの状態によっては自動読取が正確にできない場合があります。</li>
+    <li>最終的な見積前には、読み取り結果と面積を確認してください。</li>
+    <li>AI読取が使えない場合でも、手入力で積算できます。</li>
+  </ul>
+</section>
+{% endblock %}

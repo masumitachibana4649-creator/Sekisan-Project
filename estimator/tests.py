@@ -174,12 +174,12 @@ class WallpaperEstimateTests(TestCase):
         self.assertFalse(user.is_superuser)
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
 
-    def test_staff_login_redirects_to_admin(self):
+    def test_staff_login_redirects_to_dashboard(self):
         staff = User.objects.create_user(username="staff", password="password", is_staff=True)
 
         response = self.client.post(reverse("login"), {"username": staff.username, "password": "password"})
 
-        self.assertRedirects(response, "/admin/", fetch_redirect_response=False)
+        self.assertRedirects(response, reverse("dashboard"))
 
     def test_project_views_reject_other_users(self):
         owner = User.objects.create_user(username="owner-user", password="password")
