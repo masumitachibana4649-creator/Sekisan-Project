@@ -19,6 +19,7 @@
     {% if request.user.is_authenticated %}
       <a class="primary-action" href="{% url 'project_create' %}">積算を開始</a>
     {% endif %}
+    <img class="dashboard-character" src="{% static 'estimator/tachikuro-kun.png' %}" alt="タチクロくん">
   </div>
   <aside class="drawing-panel" aria-label="図面プレビュー">
     <img class="dashboard-plan" src="{% static 'estimator/dashboard-plan.png' %}" alt="平面図プレビュー">

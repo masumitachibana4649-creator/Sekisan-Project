@@ -4,12 +4,15 @@
 
 {% block content %}
 <section class="content-band about-hero" style="background: linear-gradient(rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.84)), url('{% static "estimator/dashboard-wallpaper-no2.png" %}') center / cover;">
-  <div class="page-kicker">このサイトについて</div>
-  <h1 style="max-width: 980px; font-size: 33px !important; line-height: 1.25;">壁紙工事の積算作業を、図面からすばやく整理します</h1>
-  <p>
-    このサイトは、PDF図面をもとに壁紙の必要面積・ロール本数・概算金額を算出し、
-    案件ごとの積算結果を保存できるWebシステムです。
-  </p>
+  <div class="about-hero-copy">
+    <div class="page-kicker">このサイトについて</div>
+    <h1 style="max-width: 980px; font-size: 33px !important; line-height: 1.25;">壁紙工事の積算作業を、図面からすばやく整理します</h1>
+    <p>
+      このサイトは、PDF図面をもとに壁紙の必要面積・ロール本数・概算金額を算出し、
+      案件ごとの積算結果を保存できるWebシステムです。
+    </p>
+  </div>
+  <img class="about-character" src="{% static 'estimator/tachikuro-kun.png' %}" alt="タチクロくん">
 </section>
 
 <section class="content-band about-section">
