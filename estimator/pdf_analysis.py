@@ -1,3 +1,5 @@
+"""PDF図面から壁紙積算に必要な部屋情報を抽出する処理を定義する。"""
+
 from dataclasses import dataclass
 from decimal import Decimal
 import json
@@ -15,6 +17,17 @@ except ImportError:  # pragma: no cover - allows isolated script usage.
 
 @dataclass(frozen=True)
 class AnalyzedRoom:
+    """PDF解析で抽出した部屋情報を表すデータクラス。
+
+    Attributes:
+        name: 名前。
+        perimeter_m: 部屋の周長。
+        height_m: 天井高。
+        opening_area_m2: 開口部面積。
+        ceiling_area_m2: 天井面積。
+        note: 備考。
+        wall_surfaces: 1面から4面までの壁面情報。
+    """
     name: str
     perimeter_m: Decimal
     height_m: Decimal
@@ -26,6 +39,14 @@ class AnalyzedRoom:
 
 @dataclass(frozen=True)
 class PdfAnalysisResult:
+    """PDF解析結果全体を表すデータクラス。
+
+    Attributes:
+        rooms: AI解析で抽出した部屋一覧。
+        memo: 解析結果の補足メモ。
+        missing_rooms: 面積情報を抽出できなかった部屋名一覧。
+        room_candidates: 表ページなどから検出した部屋候補一覧。
+    """
     rooms: list[AnalyzedRoom]
     memo: str
     missing_rooms: list[str] | None = None
@@ -34,6 +55,15 @@ class PdfAnalysisResult:
 
 @dataclass(frozen=True)
 class RoomCandidate:
+    """表ページなどから検出した部屋候補を表すデータクラス。
+
+    Attributes:
+        floor: 階数ラベル。
+        name: 名前。
+        area_m2: 部屋候補の面積。
+        source: 階数やページ番号の判定に使う文字列。
+        page: 候補を検出したページ番号。
+    """
     floor: str
     name: str
     area_m2: Decimal | None
@@ -79,6 +109,17 @@ ROOM_LABEL_PATTERNS = {
 
 
 def analyze_wallpaper_pdf(pdf_path, page_map=None, table_pages=None, allow_visual_table_detection=True):
+    """PDF図面を解析して壁紙積算用の部屋情報を抽出する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        page_map: 画面で指定されたページ情報。
+        table_pages: 表ページのラベルとページ番号。
+        allow_visual_table_detection: 画像解析による表ページ検出を許可する場合はTrue。
+
+    Returns:
+        PDF解析結果。
+    """
     page_count = _pdf_page_count(pdf_path)
     parsed_pages = _parse_page_map(page_map or {}, page_count)
     if not parsed_pages.get("page_1f_plan") and not parsed_pages.get("page_2f_plan") and not parsed_pages.get("page_3f_plan"):
@@ -145,6 +186,14 @@ def analyze_wallpaper_pdf(pdf_path, page_map=None, table_pages=None, allow_visua
 
 
 def _pdf_page_count(pdf_path):
+    """PDFのページ数を取得する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+
+    Returns:
+        PDFの総ページ数。
+    """
     try:
         from pypdf import PdfReader
     except ImportError as exc:
@@ -158,6 +207,15 @@ def _pdf_page_count(pdf_path):
 
 
 def _parse_page_map(page_map, page_count):
+    """画面で指定されたページ情報を検証して正規化する。
+
+    Args:
+        page_map: 画面で指定されたページ情報。
+        page_count: PDFの総ページ数。
+
+    Returns:
+        検証済みのページ指定辞書。
+    """
     parsed = {}
     for key in PAGE_LABELS:
         raw_value = str(page_map.get(key, "")).strip()
@@ -185,6 +243,18 @@ def _parse_page_map(page_map, page_count):
 
 
 def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None, table_pages=None, room_candidates=None):
+    """OpenAI APIを使ってPDFから部屋情報を抽出する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        parsed_pages: 検証済みのページ指定。
+        expected_counts: ページテキストから推定した部屋種別ごとの件数。
+        table_pages: 表ページのラベルとページ番号。
+        room_candidates: 表ページなどから検出した部屋候補。
+
+    Returns:
+        AI応答を解析した部屋情報辞書。
+    """
     api_key = _setting("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY が設定されていないためPDF AI読取を実行できません。")
@@ -250,6 +320,16 @@ def _extract_rooms_with_ai(pdf_path, parsed_pages, expected_counts=None, table_p
 
 
 def _write_selected_pages_pdf(pdf_path, parsed_pages, additional_pages=None):
+    """AI解析に必要なページだけを抽出した一時PDFを作成する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        parsed_pages: 検証済みのページ指定。
+        additional_pages: 追加でAI解析に含めるページ番号。
+
+    Returns:
+        抽出した一時PDFファイルのパス。
+    """
     try:
         from pypdf import PdfReader, PdfWriter
     except ImportError as exc:
@@ -275,6 +355,15 @@ def _write_selected_pages_pdf(pdf_path, parsed_pages, additional_pages=None):
 
 
 def _analysis_page_numbers(parsed_pages, additional_pages=None):
+    """AI解析対象に含めるページ番号を重複なしで返す。
+
+    Args:
+        parsed_pages: 検証済みのページ指定。
+        additional_pages: 追加でAI解析に含めるページ番号。
+
+    Returns:
+        AI解析対象のページ番号一覧。
+    """
     selected_pages = []
     development_start = parsed_pages.get("page_development_start")
     development_end = parsed_pages.get("page_development_end")
@@ -294,6 +383,17 @@ def _analysis_page_numbers(parsed_pages, additional_pages=None):
 
 
 def _analysis_prompt(parsed_pages, expected_counts=None, table_pages=None, room_candidates=None):
+    """PDF解析AIへ渡す指示文を組み立てる。
+
+    Args:
+        parsed_pages: 検証済みのページ指定。
+        expected_counts: ページテキストから推定した部屋種別ごとの件数。
+        table_pages: 表ページのラベルとページ番号。
+        room_candidates: 表ページなどから検出した部屋候補。
+
+    Returns:
+        AI解析用のプロンプト文字列。
+    """
     page_lines = "\n".join(
         f"- {PAGE_LABELS[key]}: {value}ページ" for key, value in parsed_pages.items() if value is not None
     )
@@ -367,18 +467,42 @@ def _analysis_prompt(parsed_pages, expected_counts=None, table_pages=None, room_
 
 
 def _expected_room_prompt_lines(expected_counts):
+    """部屋種別ごとの推定件数をプロンプト用の行に変換する。
+
+    Args:
+        expected_counts: ページテキストから推定した部屋種別ごとの件数。
+
+    Returns:
+        処理結果。
+    """
     if not expected_counts:
         return "- なし"
     return "\n".join(f"- {label}: 約{count}件" for label, count in expected_counts.items())
 
 
 def _table_page_prompt_lines(table_pages):
+    """表ページ情報をプロンプト用の行に変換する。
+
+    Args:
+        table_pages: 表ページのラベルとページ番号。
+
+    Returns:
+        処理結果。
+    """
     if not table_pages:
         return "- なし"
     return "\n".join(f"- {label}: {page}ページ" for label, page in table_pages)
 
 
 def _room_candidate_prompt_lines(room_candidates):
+    """部屋候補をプロンプト用の行に変換する。
+
+    Args:
+        room_candidates: 表ページなどから検出した部屋候補。
+
+    Returns:
+        処理結果。
+    """
     if not room_candidates:
         return "- なし"
     lines = []
@@ -390,6 +514,11 @@ def _room_candidate_prompt_lines(room_candidates):
 
 
 def _analysis_schema():
+    """PDF解析AIのJSON応答スキーマを返す。
+
+    Returns:
+        AI解析応答のJSON Schema。
+    """
     surface_schema = {
         "type": "object",
         "properties": {
@@ -448,6 +577,14 @@ def _analysis_schema():
 
 
 def _response_text(response):
+    """OpenAI応答から解析対象のテキストを取り出す。
+
+    Args:
+        response: OpenAI APIの応答オブジェクト。
+
+    Returns:
+        AI応答から取り出したテキスト。
+    """
     output_text = getattr(response, "output_text", None)
     if output_text:
         return output_text
@@ -464,6 +601,14 @@ def _response_text(response):
 
 
 def _parse_ai_analysis_response(response_text):
+    """AI応答JSONをアプリ内部の解析結果へ変換する。
+
+    Args:
+        response_text: AI応答のJSON文字列。
+
+    Returns:
+        部屋・抽出失敗部屋・警告を含む辞書。
+    """
     try:
         payload = json.loads(response_text)
     except json.JSONDecodeError as exc:
@@ -497,6 +642,14 @@ def _parse_ai_analysis_response(response_text):
 
 
 def _wall_surfaces_from_ai(value):
+    """AI応答の面別情報をアプリ内部形式へ変換する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        面別情報の辞書。
+    """
     if not isinstance(value, dict):
         return None
 
@@ -526,6 +679,21 @@ def _validate_room_extraction(
     missing_rooms=None,
     room_candidates=None,
 ):
+    """抽出済み部屋と候補情報を照合して警告を返す。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        parsed_pages: 検証済みのページ指定。
+        rooms: 抽出済みの部屋情報。
+        room_candidate_text: 部屋候補抽出に使うページテキスト。
+        expected_counts: ページテキストから推定した部屋種別ごとの件数。
+        missing_room_count: 抽出失敗として追加する部屋数。
+        missing_rooms: 抽出できなかった部屋名の一覧。
+        room_candidates: 表ページなどから検出した部屋候補。
+
+    Returns:
+        検証警告メッセージの一覧。
+    """
     room_candidate_text = (
         room_candidate_text if room_candidate_text is not None else _room_candidate_page_text(pdf_path, parsed_pages)
     )
@@ -575,6 +743,16 @@ def _validate_room_extraction(
 
 
 def _validate_room_candidates(rooms, missing_rooms, room_candidates):
+    """表ページ候補が表示対象に含まれているかを検証する。
+
+    Args:
+        rooms: 抽出済みの部屋情報。
+        missing_rooms: 抽出できなかった部屋名の一覧。
+        room_candidates: 表ページなどから検出した部屋候補。
+
+    Returns:
+        表ページ候補に対する検証警告メッセージの一覧。
+    """
     displayed = set()
     storage_bundle_floors = set()
     for room in rooms:
@@ -616,23 +794,67 @@ def _validate_room_candidates(rooms, missing_rooms, room_candidates):
 
 
 def _candidate_label(candidate):
+    """部屋候補の表示ラベルを返す。
+
+    Args:
+        candidate: 部屋候補。
+
+    Returns:
+        表示用の部屋候補名。
+    """
     floor = f"{candidate.floor} " if candidate.floor else ""
     return f"{floor}{candidate.name}"
 
 
 def _missing_only_secondary_spaces(missing):
+    """不足候補が補助空間だけかどうかを返す。
+
+    Args:
+        missing: 不足している部屋種別ごとの件数。
+
+    Returns:
+        処理結果。
+    """
     return bool(missing) and set(missing).issubset({"収納", "廊下", "玄関"})
 
 
 def _plan_page_text(pdf_path, parsed_pages):
+    """平面図ページのテキストを取得する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        parsed_pages: 検証済みのページ指定。
+
+    Returns:
+        処理結果。
+    """
     return _page_text_for_keys(pdf_path, parsed_pages, PLAN_PAGE_KEYS)
 
 
 def _room_candidate_page_text(pdf_path, parsed_pages):
+    """部屋候補抽出に使うページテキストを取得する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        parsed_pages: 検証済みのページ指定。
+
+    Returns:
+        処理結果。
+    """
     return _page_text_for_keys(pdf_path, parsed_pages, ROOM_CANDIDATE_PAGE_KEYS)
 
 
 def _page_text_for_keys(pdf_path, parsed_pages, page_keys):
+    """指定ページキーに対応するPDFテキストを取得する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        parsed_pages: 検証済みのページ指定。
+        page_keys: 抽出対象のページキー。
+
+    Returns:
+        処理結果。
+    """
     try:
         from pypdf import PdfReader
 
@@ -651,6 +873,15 @@ def _page_text_for_keys(pdf_path, parsed_pages, page_keys):
 
 
 def _detect_table_pages(pdf_path, allow_visual_detection=True):
+    """PDF内の表ページを検出する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        allow_visual_detection: 画像解析による表ページ検出を許可する場合はTrue。
+
+    Returns:
+        処理結果。
+    """
     try:
         from pypdf import PdfReader
 
@@ -676,6 +907,14 @@ def _detect_table_pages(pdf_path, allow_visual_detection=True):
 
 
 def _detect_garbled_table_pages(extracted_texts):
+    """文字化けした表ページ候補を検出する。
+
+    Args:
+        extracted_texts: PDF各ページから抽出したテキスト一覧。
+
+    Returns:
+        処理結果。
+    """
     table_pages = []
     for index, text in enumerate(extracted_texts, start=1):
         normalized = unicodedata.normalize("NFKC", text or "")
@@ -687,16 +926,40 @@ def _detect_garbled_table_pages(extracted_texts):
 
 
 def _looks_like_garbled_fixture_table(text):
+    """文字化けテキストが建具表らしいかを返す。
+
+    Args:
+        text: 解析対象の文字列。
+
+    Returns:
+        処理結果。
+    """
     return "਺ྔ" in text and "ੇ๏" in text and text.count("਺ྔ") >= 2
 
 
 def _looks_like_garbled_finish_table(text):
+    """文字化けテキストが仕上表らしいかを返す。
+
+    Args:
+        text: 解析対象の文字列。
+
+    Returns:
+        処理結果。
+    """
     finish_markers = ("έΠΧϧ൘", "̥ɾ̗", "Լ԰", "্ද")
     floor_area_markers = ("̍֊চ໘ੵ", "̎֊চ໘ੵ", "Ԇচ໘ੵ")
     return any(marker in text for marker in finish_markers) and any(marker in text for marker in floor_area_markers)
 
 
 def _should_use_visual_table_detection(extracted_texts):
+    """画像解析による表ページ検出が必要かを返す。
+
+    Args:
+        extracted_texts: PDF各ページから抽出したテキスト一覧。
+
+    Returns:
+        処理結果。
+    """
     text = "\n".join(extracted_texts)
     if not text.strip():
         return True
@@ -710,6 +973,15 @@ def _should_use_visual_table_detection(extracted_texts):
 
 
 def _detect_table_pages_with_ai(pdf_path, page_count):
+    """AI画像解析で表ページを検出する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        page_count: PDFの総ページ数。
+
+    Returns:
+        処理結果。
+    """
     if not _setting("OPENAI_API_KEY"):
         return []
     if str(_setting("OPENAI_VISUAL_TABLE_PAGE_DETECTION", "false")).lower() not in {"1", "true", "yes", "on"}:
@@ -764,6 +1036,14 @@ def _detect_table_pages_with_ai(pdf_path, page_count):
 
 
 def _table_page_detection_prompt(page_count):
+    """表ページ検出AIへ渡す指示文を返す。
+
+    Args:
+        page_count: PDFの総ページ数。
+
+    Returns:
+        処理結果。
+    """
     labels = "、".join(label for label, _keyword in TABLE_PAGE_KEYWORDS)
     return f"""
 添付PDFは建築図面です。PDF内の埋め込みテキストが文字化けしている可能性があるため、
@@ -785,6 +1065,11 @@ def _table_page_detection_prompt(page_count):
 
 
 def _table_page_detection_schema():
+    """表ページ検出AIのJSON応答スキーマを返す。
+
+    Returns:
+        処理結果。
+    """
     return {
         "type": "object",
         "properties": {
@@ -811,6 +1096,15 @@ def _table_page_detection_schema():
 
 
 def _parse_table_page_detection_response(response_text, page_count):
+    """表ページ検出AIの応答をページ一覧へ変換する。
+
+    Args:
+        response_text: AI応答のJSON文字列。
+        page_count: PDFの総ページ数。
+
+    Returns:
+        処理結果。
+    """
     try:
         payload = json.loads(response_text)
     except json.JSONDecodeError:
@@ -832,6 +1126,14 @@ def _parse_table_page_detection_response(response_text, page_count):
 
 
 def _deduplicate_table_pages(table_pages):
+    """表ページ一覧の重複を除外する。
+
+    Args:
+        table_pages: 表ページのラベルとページ番号。
+
+    Returns:
+        処理結果。
+    """
     deduplicated = []
     seen = set()
     for label, page in table_pages:
@@ -844,6 +1146,15 @@ def _deduplicate_table_pages(table_pages):
 
 
 def _room_table_candidates(pdf_path, table_pages):
+    """表ページから部屋候補を抽出する。
+
+    Args:
+        pdf_path: 解析対象のPDFファイルパス。
+        table_pages: 表ページのラベルとページ番号。
+
+    Returns:
+        処理結果。
+    """
     if not table_pages:
         return []
     try:
@@ -871,6 +1182,14 @@ def _room_table_candidates(pdf_path, table_pages):
 
 
 def _normalize_room_table_candidates(candidates):
+    """部屋候補名と階数を正規化する。
+
+    Args:
+        candidates: 正規化または重複除外する部屋候補一覧。
+
+    Returns:
+        処理結果。
+    """
     aggregated = []
     storage_by_floor = {}
     for candidate in candidates:
@@ -900,6 +1219,14 @@ def _normalize_room_table_candidates(candidates):
 
 
 def _deduplicate_candidate_names(candidates):
+    """同一候補名の重複を除外する。
+
+    Args:
+        candidates: 正規化または重複除外する部屋候補一覧。
+
+    Returns:
+        処理結果。
+    """
     totals = {}
     for candidate in candidates:
         key = (_normalize_floor(candidate.floor), _normalize_room_name(candidate.name))
@@ -926,6 +1253,16 @@ def _deduplicate_candidate_names(candidates):
 
 
 def _room_table_candidates_from_text(text, source, page_number):
+    """表ページテキストから部屋候補を抽出する。
+
+    Args:
+        text: 解析対象の文字列。
+        source: 階数やページ番号の判定に使う文字列。
+        page_number: PDF上のページ番号。
+
+    Returns:
+        処理結果。
+    """
     if source == "床面積表":
         return _floor_area_table_candidates(text, source, page_number)
     if source == "居室区画面積表":
@@ -936,6 +1273,16 @@ def _room_table_candidates_from_text(text, source, page_number):
 
 
 def _floor_area_table_candidates(text, source, page_number):
+    """床面積表から部屋候補を抽出する。
+
+    Args:
+        text: 解析対象の文字列。
+        source: 階数やページ番号の判定に使う文字列。
+        page_number: PDF上のページ番号。
+
+    Returns:
+        処理結果。
+    """
     section = _table_section(text, "床面積表")
     if not section:
         return []
@@ -962,6 +1309,16 @@ def _floor_area_table_candidates(text, source, page_number):
 
 
 def _living_area_table_candidates(text, source, page_number):
+    """居室区画面積表から部屋候補を抽出する。
+
+    Args:
+        text: 解析対象の文字列。
+        source: 階数やページ番号の判定に使う文字列。
+        page_number: PDF上のページ番号。
+
+    Returns:
+        処理結果。
+    """
     section = _table_section(text, "居室区画面積表")
     if not section:
         return []
@@ -976,6 +1333,16 @@ def _living_area_table_candidates(text, source, page_number):
 
 
 def _finish_table_candidates(text, source, page_number):
+    """仕上表から部屋候補を抽出する。
+
+    Args:
+        text: 解析対象の文字列。
+        source: 階数やページ番号の判定に使う文字列。
+        page_number: PDF上のページ番号。
+
+    Returns:
+        処理結果。
+    """
     candidates = []
     floor = ""
     for raw_line in text.splitlines():
@@ -988,6 +1355,15 @@ def _finish_table_candidates(text, source, page_number):
 
 
 def _table_section(text, marker):
+    """表テキストから指定見出し以降のセクションを取り出す。
+
+    Args:
+        text: 解析対象の文字列。
+        marker: 抽出対象の表セクション見出し。
+
+    Returns:
+        処理結果。
+    """
     start = text.find(marker)
     if start < 0:
         return ""
@@ -995,6 +1371,17 @@ def _table_section(text, marker):
 
 
 def _room_candidates_from_line(line, floor, source, page_number):
+    """表の1行から部屋候補を抽出する。
+
+    Args:
+        line: 表ページから抽出した1行の文字列。
+        floor: 階数ラベル。
+        source: 階数やページ番号の判定に使う文字列。
+        page_number: PDF上のページ番号。
+
+    Returns:
+        処理結果。
+    """
     candidates = []
     line = unicodedata.normalize("NFKC", line)
     normalized = _normalize_text(line)
@@ -1011,6 +1398,14 @@ def _room_candidates_from_line(line, floor, source, page_number):
 
 
 def _infer_floors_for_living_area_candidates(candidates):
+    """居室区画面積表の候補へ階数を補完する。
+
+    Args:
+        candidates: 正規化または重複除外する部屋候補一覧。
+
+    Returns:
+        処理結果。
+    """
     if not candidates:
         return []
     inferred = []
@@ -1031,6 +1426,14 @@ def _infer_floors_for_living_area_candidates(candidates):
 
 
 def _normalize_room_display_name(value):
+    """部屋候補の表示名を正規化する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     name = unicodedata.normalize("NFKC", str(value or "")).strip()
     name = re.sub(r"^[0-9０-９.,，×＝=\-+\s]+", "", name)
     name = name.translate(str.maketrans({
@@ -1051,6 +1454,15 @@ def _normalize_room_display_name(value):
 
 
 def _is_supported_table_page(text, label):
+    """部屋候補抽出に対応した表ページかどうかを返す。
+
+    Args:
+        text: 解析対象の文字列。
+        label: 表ページ種別のラベル。
+
+    Returns:
+        処理結果。
+    """
     normalized = unicodedata.normalize("NFKC", text)
     if label == "居室区画面積表":
         return "部 屋" in normalized or "部屋" in normalized
@@ -1064,11 +1476,28 @@ def _is_supported_table_page(text, label):
 
 
 def _is_non_wallpaper_candidate(name):
+    """壁紙施工対象外の部屋候補かどうかを返す。
+
+    Args:
+        name: 名前。
+
+    Returns:
+        処理結果。
+    """
     normalized = _normalize_room_name(name)
     return any(_normalize_room_name(excluded) in normalized for excluded in NON_WALLPAPER_CANDIDATE_NAMES)
 
 
 def _missing_room_count(missing_rooms, analyzed_rooms):
+    """抽出失敗として追加する部屋数を数える。
+
+    Args:
+        missing_rooms: 抽出できなかった部屋名の一覧。
+        analyzed_rooms: AI解析済みの部屋一覧。
+
+    Returns:
+        処理結果。
+    """
     extracted = set()
     for room in analyzed_rooms:
         extracted.update(_room_match_keys(room.name))
@@ -1082,6 +1511,16 @@ def _missing_room_count(missing_rooms, analyzed_rooms):
 
 
 def _candidate_missing_room_count(rooms, missing_rooms, room_candidates):
+    """表ページ候補から未表示の部屋数を数える。
+
+    Args:
+        rooms: 抽出済みの部屋情報。
+        missing_rooms: 抽出できなかった部屋名の一覧。
+        room_candidates: 表ページなどから検出した部屋候補。
+
+    Returns:
+        処理結果。
+    """
     displayed = set()
     storage_bundle_floors = set()
     for room in rooms:
@@ -1101,16 +1540,40 @@ def _candidate_missing_room_count(rooms, missing_rooms, room_candidates):
 
 
 def _normalize_room_name(value):
+    """部屋名を照合用に正規化する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     return unicodedata.normalize("NFKC", str(value or "")).upper().replace(" ", "")
 
 
 def _normalize_floor(value):
+    """階数表記を照合用に正規化する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     normalized = unicodedata.normalize("NFKC", str(value or "")).upper().strip()
     match = re.search(r"([1-9])\s*(?:F|階)", normalized)
     return f"{match.group(1)}F" if match else normalized
 
 
 def _room_match_keys(value):
+    """部屋名の照合キーを作成する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     normalized = _normalize_room_name(value)
     keys = {normalized} if normalized else set()
     without_floor = re.sub(r"^[1-9](?:F|階)", "", normalized)
@@ -1121,6 +1584,14 @@ def _room_match_keys(value):
 
 
 def _candidate_match_keys(candidate):
+    """部屋候補の照合キーを作成する。
+
+    Args:
+        candidate: 部屋候補。
+
+    Returns:
+        処理結果。
+    """
     keys = set()
     if candidate.floor:
         keys.add(_normalize_room_name(f"{candidate.floor} {candidate.name}"))
@@ -1130,6 +1601,15 @@ def _candidate_match_keys(candidate):
 
 
 def _displayed_room_match_keys(name, note=""):
+    """表示済み部屋の照合キーを作成する。
+
+    Args:
+        name: 名前。
+        note: 備考。
+
+    Returns:
+        処理結果。
+    """
     keys = _room_match_keys(name)
     floor = _floor_label_from_text(f"{name} {note}")
     if floor:
@@ -1138,6 +1618,16 @@ def _displayed_room_match_keys(name, note=""):
 
 
 def _candidate_is_displayed(candidate, displayed, storage_bundle_floors):
+    """部屋候補が表示済みとして扱えるかを返す。
+
+    Args:
+        candidate: 部屋候補。
+        displayed: 画面に表示済みの部屋照合キー。
+        storage_bundle_floors: 収納一式として表示済みの階数。
+
+    Returns:
+        処理結果。
+    """
     if _candidate_match_keys(candidate) & displayed:
         return True
     if (
@@ -1150,17 +1640,41 @@ def _candidate_is_displayed(candidate, displayed, storage_bundle_floors):
 
 
 def _is_storage_bundle(value):
+    """収納一式を表す部屋名かどうかを返す。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     normalized = _normalize_room_name(value)
     return "収納" in normalized and "一式" in normalized
 
 
 def _floor_label_from_text(value):
+    """文字列から階数ラベルを抽出する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     normalized = unicodedata.normalize("NFKC", str(value or "")).upper()
     match = re.search(r"([1-9])\s*(?:F|階)", normalized)
     return f"{match.group(1)}F" if match else ""
 
 
 def _expected_room_counts(plan_text):
+    """平面図テキストから部屋種別ごとの候補数を推定する。
+
+    Args:
+        plan_text: 平面図または天井伏図から抽出したテキスト。
+
+    Returns:
+        処理結果。
+    """
     text = _normalize_text(plan_text)
     counts = {}
     for label, aliases in ROOM_LABEL_PATTERNS.items():
@@ -1173,6 +1687,16 @@ def _expected_room_counts(plan_text):
 
 
 def _actual_room_count(room_text, aliases, expected_count):
+    """抽出済み部屋テキスト内の部屋種別件数を数える。
+
+    Args:
+        room_text: 抽出済み部屋名を連結したテキスト。
+        aliases: 部屋種別の別名一覧。
+        expected_count: 期待される部屋数。
+
+    Returns:
+        処理結果。
+    """
     text = _normalize_text(room_text)
     if "一式" in str(room_text) and any(alias in text for alias in {_normalize_text(alias) for alias in aliases}):
         return expected_count
@@ -1180,6 +1704,15 @@ def _actual_room_count(room_text, aliases, expected_count):
 
 
 def _count_alias_occurrences(text, aliases):
+    """別名一覧に一致する出現数を数える。
+
+    Args:
+        text: 解析対象の文字列。
+        aliases: 部屋種別の別名一覧。
+
+    Returns:
+        処理結果。
+    """
     normalized_aliases = sorted(
         {_normalize_text(alias) for alias in aliases if _normalize_text(alias)},
         key=len,
@@ -1196,10 +1729,27 @@ def _count_alias_occurrences(text, aliases):
 
 
 def _normalize_text(value):
+    """照合しやすいよう文字列を正規化する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        処理結果。
+    """
     return str(value).replace("ＬＤＫ", "LDK").upper()
 
 
 def _decimal_from_ai(value, default):
+    """AI応答値をDecimalへ変換する。
+
+    Args:
+        value: 変換または正規化する値。
+        default: 値が空または不正な場合の既定値。
+
+    Returns:
+        処理結果。
+    """
     try:
         return Decimal(str(value if value is not None else default)).quantize(Decimal("0.01"))
     except Exception:
@@ -1207,6 +1757,15 @@ def _decimal_from_ai(value, default):
 
 
 def _setting(name, default=None):
+    """Django設定または環境変数から値を取得する。
+
+    Args:
+        name: 名前。
+        default: 値が空または不正な場合の既定値。
+
+    Returns:
+        処理結果。
+    """
     if settings is not None and getattr(settings, "configured", False):
         value = getattr(settings, name, None)
         if value is not None:
@@ -1215,6 +1774,14 @@ def _setting(name, default=None):
 
 
 def _sample_plan_rooms(parsed_pages=None):
+    """テスト用サンプルPDFから期待される部屋一覧を返す。
+
+    Args:
+        parsed_pages: 検証済みのページ指定。
+
+    Returns:
+        処理結果。
+    """
     parsed_pages = parsed_pages or {
         "page_1f_plan": 5,
         "page_2f_plan": 6,

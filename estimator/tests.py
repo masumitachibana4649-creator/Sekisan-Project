@@ -1,3 +1,5 @@
+"""壁紙積算アプリのモデル、ビュー、PDF解析処理のテストを定義する。"""
+
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -38,10 +40,13 @@ from .templatetags.estimate_extras import room_note, sentence_breaks
 
 
 class WallpaperEstimateTests(TestCase):
+    """壁紙積算アプリの主要機能を検証するテストケース。"""
     def setUp(self):
+        """各テストで使用するユーザーを作成する。"""
         self.user = User.objects.create_user(username="user", password="password")
 
     def test_rolls_are_rounded_up_per_room(self):
+        """rolls are rounded up per roomを検証する。"""
         project = Project.objects.create(
             name="テスト案件",
             wallpaper_roll_width_m=Decimal("0.92"),
@@ -63,6 +68,7 @@ class WallpaperEstimateTests(TestCase):
 
     @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_view_reads_pdf_and_redirects(self):
+        """project create view reads pdf and redirectsを検証する。"""
         self.client.force_login(self.user)
         analysis = PdfAnalysisResult(
             rooms=[
@@ -109,11 +115,13 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.total_rolls, 2)
 
     def test_project_create_requires_login(self):
+        """project create requires loginを検証する。"""
         response = self.client.get(reverse("project_create"))
 
         self.assertRedirects(response, f"{reverse('login')}?next={reverse('project_create')}")
 
     def test_dashboard_hides_history_and_start_button_before_login(self):
+        """dashboard hides history and start button before loginを検証する。"""
         Project.objects.create(name="非表示案件", uploaded_by=self.user)
 
         response = self.client.get(reverse("dashboard"))
@@ -123,6 +131,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "ログインすると積算履歴を確認できます")
 
     def test_dashboard_shows_only_current_user_projects(self):
+        """dashboard shows only current user projectsを検証する。"""
         other_user = User.objects.create_user(username="other-user", password="password")
         Project.objects.create(name="自分の案件", uploaded_by=self.user)
         Project.objects.create(name="他人の案件", uploaded_by=other_user)
@@ -135,6 +144,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotContains(response, "他人の案件")
 
     def test_dashboard_distinguishes_complete_and_failed_estimates(self):
+        """dashboard distinguishes complete and failed estimatesを検証する。"""
         completed = Project.objects.create(name="積算完了案件", uploaded_by=self.user)
         Room.objects.create(
             project=completed,
@@ -159,6 +169,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "結果を見る")
 
     def test_signup_creates_general_user_and_logs_in(self):
+        """signup creates general user and logs inを検証する。"""
         response = self.client.post(
             reverse("signup"),
             {
@@ -175,6 +186,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
 
     def test_staff_login_redirects_to_dashboard(self):
+        """staff login redirects to dashboardを検証する。"""
         staff = User.objects.create_user(username="staff", password="password", is_staff=True)
 
         response = self.client.post(reverse("login"), {"username": staff.username, "password": "password"})
@@ -182,6 +194,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertRedirects(response, reverse("dashboard"))
 
     def test_project_views_reject_other_users(self):
+        """project views reject other usersを検証する。"""
         owner = User.objects.create_user(username="owner-user", password="password")
         project = Project.objects.create(name="他人の積算", uploaded_by=owner, drawing_pdf="drawings/dummy.pdf")
         self.client.force_login(self.user)
@@ -197,6 +210,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertTrue(all(response.status_code == 403 for response in checks))
 
     def test_project_pdf_view_serves_uploaded_pdf(self):
+        """project pdf view serves uploaded pdfを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(
             name="PDF表示テスト",
@@ -215,6 +229,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("inline", response["Content-Disposition"])
 
     def test_project_detail_shows_recalculate_button_when_estimate_failed(self):
+        """project detail shows recalculate button when estimate failedを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(
             name="積算失敗案件",
@@ -231,6 +246,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotContains(response, 'href="' + reverse("project_detail", args=[project.pk]) + '?edit=1"')
 
     def test_project_detail_action_buttons_follow_estimate_state(self):
+        """project detail action buttons follow estimate stateを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="積算完了案件", uploaded_by=self.user, drawing_pdf="drawings/dummy.pdf")
         Room.objects.create(
@@ -254,6 +270,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotContains(response, 'href="' + reverse("project_detail", args=[project.pk]) + '?edit=1"')
 
     def test_room_columns_split_number_floor_and_name_in_detail_and_csv(self):
+        """room columns split number floor and name in detail and csvを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="階表示案件", uploaded_by=self.user)
         Room.objects.create(
@@ -277,6 +294,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "1,1F,トイレ")
 
     def test_room_display_name_normalizes_floor_without_duplicates(self):
+        """room display name normalizes floor without duplicatesを検証する。"""
         project = Project.objects.create(name="階重複案件", uploaded_by=self.user)
         room = Room.objects.create(
             project=project,
@@ -304,6 +322,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(atrium.display_room_name, "吹抜")
 
     def test_estimated_openings_are_blue_in_display_mode(self):
+        """estimated openings are blue in display modeを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="推定表示案件", uploaded_by=self.user)
         Room.objects.create(
@@ -328,6 +347,7 @@ class WallpaperEstimateTests(TestCase):
         SUPABASE_BUCKET="pdfs",
     )
     def test_project_create_uploads_pdf_to_supabase_storage(self):
+        """project create uploads pdf to supabase storageを検証する。"""
         self.client.force_login(self.user)
         analysis = PdfAnalysisResult(
             rooms=[],
@@ -361,6 +381,7 @@ class WallpaperEstimateTests(TestCase):
         SUPABASE_BUCKET="pdfs",
     )
     def test_project_pdf_view_redirects_to_signed_url_for_owner(self):
+        """project pdf view redirects to signed url for ownerを検証する。"""
         owner = User.objects.create_user(username="owner", password="password")
         project = Project.objects.create(
             name="署名URL案件",
@@ -379,6 +400,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(response["Location"], "https://example.supabase.co/signed")
 
     def test_project_pdf_view_rejects_non_owner_for_storage_pdf(self):
+        """project pdf view rejects non owner for storage pdfを検証する。"""
         owner = User.objects.create_user(username="owner", password="password")
         other = User.objects.create_user(username="other", password="password")
         project = Project.objects.create(
@@ -393,12 +415,14 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_result_text_filters_insert_sentence_breaks_and_format_confidence(self):
+        """result text filters insert sentence breaks and format confidenceを検証する。"""
         self.assertEqual(str(sentence_breaks("一文目です。二文目です。")), "一文目です。<br>二文目です。<br>")
         self.assertEqual(str(sentence_breaks("メモ:施工注意です。")), "メモ<br><br>施工注意です。<br>")
         self.assertEqual(str(sentence_breaks("入力メモです。\nPDF読取説明です。")), "入力メモです。<br><br>PDF読取説明です。<br>")
         self.assertEqual(str(room_note("根拠: 図面。AI信頼度: 0.82")), "根拠: 図面。<br>AI信頼度: 82%")
 
     def test_project_detail_shows_entered_memo_without_fixed_title(self):
+        """project detail shows entered memo without fixed titleを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="メモ表示テスト", memo="入力した内容です。\nPDF読取説明です。", uploaded_by=self.user)
 
@@ -408,6 +432,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotContains(response, "<strong>メモ</strong>", html=False)
 
     def test_project_detail_room_detail_labels_include_units(self):
+        """project detail room detail labels include unitsを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="単位表示テスト", uploaded_by=self.user)
         Room.objects.create(
@@ -425,18 +450,21 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "開口部(m2)")
 
     def test_project_admin_total_columns_have_japanese_labels(self):
+        """project admin total columns have japanese labelsを検証する。"""
         project_admin = ProjectAdmin(Project, AdminSite())
 
         self.assertEqual(project_admin.total_rolls_display.short_description, "ロール本数")
         self.assertEqual(project_admin.total_cost_display.short_description, "概算金額")
 
     def test_wallpaper_admin_numeric_columns_have_lowercase_meter_labels(self):
+        """wallpaper admin numeric columns have lowercase meter labelsを検証する。"""
         wallpaper_admin = WallpaperAdmin(Wallpaper, AdminSite())
 
         self.assertEqual(wallpaper_admin.roll_width_display.short_description, "ロール幅(m)")
         self.assertEqual(wallpaper_admin.roll_length_display.short_description, "ロール長さ(m)")
 
     def test_sample_pdf_analysis_rooms_match_expected_totals(self):
+        """sample pdf analysis rooms match expected totalsを検証する。"""
         project = Project.objects.create(
             name="PDF解析テスト",
             wallpaper_roll_width_m=Decimal("0.92"),
@@ -461,6 +489,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.wallpaper_summary["room_total"]["rolls"], 16)
 
     def test_multiple_wallpapers_are_grouped_by_wallpaper_and_room(self):
+        """multiple wallpapers are grouped by wallpaper and roomを検証する。"""
         project = Project.objects.create(name="複数壁紙テスト")
         accent = Wallpaper.objects.create(
             display_order="002",
@@ -498,6 +527,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(summary["rows"][0]["wallpaper_no"], "002")
 
     def test_project_uses_room_total_method_when_selected(self):
+        """project uses room total method when selectedを検証する。"""
         project = Project.objects.create(name="採用方式テスト", adopted_estimate_method=ROOM_TOTAL_METHOD)
         for room_name in ("A部屋", "B部屋"):
             Room.objects.create(
@@ -514,6 +544,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.total_rolls, 4)
 
     def test_excluded_room_stays_in_detail_but_is_removed_from_summary(self):
+        """excluded room stays in detail but is removed from summaryを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="対象外テスト", uploaded_by=self.user)
         Room.objects.create(
@@ -547,6 +578,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "対象外")
 
     def test_pdf_missing_room_candidates_are_added_as_red_zero_rooms(self):
+        """pdf missing room candidates are added as red zero roomsを検証する。"""
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
         project = Project.objects.create(name="不足候補案件", drawing_pdf="drawings/dummy.pdf", uploaded_by=self.user)
@@ -572,6 +604,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "赤文字は抽出に失敗した部屋なので編集画面で面積、開口部を入力してください")
 
     def test_missing_rooms_from_table_candidates_keep_ceiling_area(self):
+        """missing rooms from table candidates keep ceiling areaを検証する。"""
         project = Project.objects.create(name="表候補面積反映")
         Wallpaper.ensure_defaults()
 
@@ -597,6 +630,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("表ページから天井面積 3.72m2 を反映", rooms["1F 収納 一式"].note)
 
     def test_pdf_missing_room_candidates_use_selected_surface_wallpapers(self):
+        """pdf missing room candidates use selected surface wallpapersを検証する。"""
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
         accent = Wallpaper.objects.create(
@@ -634,6 +668,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(missing_room.ceiling_wallpaper_no, "002")
 
     def test_manual_room_add_post_creates_green_zero_room(self):
+        """manual room add post creates green zero roomを検証する。"""
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
         project = Project.objects.create(name="手動追加案件", uploaded_by=self.user)
@@ -678,6 +713,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "緑文字は追加した部屋なので編集画面で面積、開口部を入力してください")
 
     def test_project_save_wallpapers_creates_revision_with_selected_method(self):
+        """project save wallpapers creates revision with selected methodを検証する。"""
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
         project = Project.objects.create(name="保存元", uploaded_by=self.user)
@@ -723,6 +759,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.rooms.get().east_wallpaper_no, "001")
 
     def test_project_apply_changes_updates_same_project_and_returns_to_edit_mode(self):
+        """project apply changes updates same project and returns to edit modeを検証する。"""
         self.client.force_login(self.user)
         Wallpaper.ensure_defaults()
         project = Project.objects.create(name="反映元", uploaded_by=self.user)
@@ -770,6 +807,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertGreater(project.total_rolls, original_rolls)
 
     def test_sample_pdf_analysis_uses_only_existing_plan_pages(self):
+        """sample pdf analysis uses only existing plan pagesを検証する。"""
         project = Project.objects.create(
             name="PDF解析テスト 1Fのみ",
             wallpaper_roll_width_m=Decimal("0.92"),
@@ -799,6 +837,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.total_area.quantize(Decimal("0.01")), Decimal("284.80"))
 
     def test_ai_analysis_response_is_converted_to_analyzed_rooms(self):
+        """ai analysis response is converted to analyzed roomsを検証する。"""
         payload = {
             "rooms": [
                 {
@@ -836,6 +875,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(result["warnings"], ["開口部は一部推定"])
 
     def test_expected_room_counts_includes_legacy_house_labels_without_double_counting(self):
+        """expected room counts includes legacy house labels without double countingを検証する。"""
         plan_text = "和室 和室 台所 食堂 洗面所 脱衣 便所 押入 物入 納戸 子供室 主寝室 ホール"
 
         counts = _expected_room_counts(plan_text)
@@ -850,14 +890,31 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(counts["廊下"], 1)
 
     def test_room_candidate_text_includes_ceiling_plan_pages(self):
+        """room candidate text includes ceiling plan pagesを検証する。
+
+        Returns:
+            処理結果。
+        """
         class FakePage:
+            """FakePageのテスト用データ構造。"""
             def __init__(self, text):
+                """__init__を処理する。
+
+                Args:
+                    text: 解析対象の文字列。
+                """
                 self.text = text
 
             def extract_text(self):
+                """extract_textを処理する。
+
+                Returns:
+                    処理結果。
+                """
                 return self.text
 
         class FakeReader:
+            """FakeReaderのテスト用データ構造。"""
             pages = [
                 FakePage("1F平面図 LDK"),
                 FakePage("1F天井伏図 洗面所"),
@@ -865,6 +922,11 @@ class WallpaperEstimateTests(TestCase):
             ]
 
             def __init__(self, _path):
+                """__init__を処理する。
+
+                Args:
+                    _path: テスト用Readerに渡される未使用のパス。
+                """
                 pass
 
         with patch("pypdf.PdfReader", FakeReader):
@@ -878,21 +940,43 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotIn("展開図", text)
 
     def test_room_candidate_text_deduplicates_same_page_numbers(self):
+        """room candidate text deduplicates same page numbersを検証する。
+
+        Returns:
+            処理結果。
+        """
         class FakePage:
+            """FakePageのテスト用データ構造。"""
             def __init__(self, text):
+                """__init__を処理する。
+
+                Args:
+                    text: 解析対象の文字列。
+                """
                 self.text = text
                 self.read_count = 0
 
             def extract_text(self):
+                """extract_textを処理する。
+
+                Returns:
+                    処理結果。
+                """
                 self.read_count += 1
                 return self.text
 
         shared_page = FakePage("1F平面図 LDK")
 
         class FakeReader:
+            """FakeReaderのテスト用データ構造。"""
             pages = [shared_page]
 
             def __init__(self, _path):
+                """__init__を処理する。
+
+                Args:
+                    _path: テスト用Readerに渡される未使用のパス。
+                """
                 pass
 
         with patch("pypdf.PdfReader", FakeReader):
@@ -905,6 +989,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(shared_page.read_count, 1)
 
     def test_analysis_prompt_keeps_rooms_when_development_drawings_are_incomplete(self):
+        """analysis prompt keeps rooms when development drawings are incompleteを検証する。"""
         prompt = _analysis_prompt(
             {
                 "page_1f_plan": 5,
@@ -928,6 +1013,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("和室: 約2件", prompt)
 
     def test_living_area_table_candidates_extract_floor_room_and_area(self):
+        """living area table candidates extract floor room and areaを検証する。"""
         text = """
         居室区画面積表
         LDK 33.122
@@ -961,6 +1047,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual([candidate.name for candidate in candidates[-2:]], ["CL", "CL"])
 
     def test_room_table_candidates_aggregate_storage_and_keep_duplicate_cl(self):
+        """room table candidates aggregate storage and keep duplicate clを検証する。"""
         candidates = _normalize_room_table_candidates([
             RoomCandidate("1F", "収納", Decimal("2.48"), "居室区画面積表", 22),
             RoomCandidate("1F", "収納", Decimal("0.83"), "居室区画面積表", 22),
@@ -979,6 +1066,7 @@ class WallpaperEstimateTests(TestCase):
         )
 
     def test_analysis_page_numbers_include_detected_table_pages(self):
+        """analysis page numbers include detected table pagesを検証する。"""
         pages = _analysis_page_numbers(
             {
                 "page_1f_plan": 9,
@@ -993,14 +1081,31 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(pages, [9, 10, 6, 11, 12, 14, 22])
 
     def test_detect_table_pages_includes_finish_and_fixture_tables(self):
+        """detect table pages includes finish and fixture tablesを検証する。
+
+        Returns:
+            処理結果。
+        """
         class FakePage:
+            """FakePageのテスト用データ構造。"""
             def __init__(self, text):
+                """__init__を処理する。
+
+                Args:
+                    text: 解析対象の文字列。
+                """
                 self.text = text
 
             def extract_text(self):
+                """extract_textを処理する。
+
+                Returns:
+                    処理結果。
+                """
                 return self.text
 
         class FakeReader:
+            """FakeReaderのテスト用データ構造。"""
             pages = [
                 FakePage("室内仕上表 壁 クロス 天井"),
                 FakePage("内部仕上表 壁 天井 仕上"),
@@ -1009,6 +1114,11 @@ class WallpaperEstimateTests(TestCase):
             ]
 
             def __init__(self, _path):
+                """__init__を処理する。
+
+                Args:
+                    _path: テスト用Readerに渡される未使用のパス。
+                """
                 pass
 
         with patch("pypdf.PdfReader", FakeReader):
@@ -1017,20 +1127,42 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(pages, [("室内仕上表", 1), ("内部仕上表", 2), ("建具表", 3)])
 
     def test_detect_table_pages_includes_garbled_finish_and_fixture_tables_without_ai(self):
+        """detect table pages includes garbled finish and fixture tables without aiを検証する。
+
+        Returns:
+            処理結果。
+        """
         class FakePage:
+            """FakePageのテスト用データ構造。"""
             def __init__(self, text):
+                """__init__を処理する。
+
+                Args:
+                    text: 解析対象の文字列。
+                """
                 self.text = text
 
             def extract_text(self):
+                """extract_textを処理する。
+
+                Returns:
+                    処理結果。
+                """
                 return self.text
 
         class FakeReader:
+            """FakeReaderのテスト用データ構造。"""
             pages = [
                 FakePage("έΠΧϧ൘ ̥ɾ̗ Լ԰ ্ද ̍֊চ໘ੵ ̎֊চ໘ੵ Ԇচ໘ੵ"),
                 FakePage("਺ྔ ࣜ ঢ়ɹੇ๏ ੇ๏ ࢠ ෺ ߟ ਺ྔ ࣜ ঢ়ɹੇ๏"),
             ]
 
             def __init__(self, _path):
+                """__init__を処理する。
+
+                Args:
+                    _path: テスト用Readerに渡される未使用のパス。
+                """
                 pass
 
         with patch("pypdf.PdfReader", FakeReader):
@@ -1040,25 +1172,69 @@ class WallpaperEstimateTests(TestCase):
 
     @override_settings(OPENAI_API_KEY="test-key", OPENAI_VISUAL_TABLE_PAGE_DETECTION="true")
     def test_detect_table_pages_uses_visual_ai_when_text_is_garbled(self):
+        """detect table pages uses visual ai when text is garbledを検証する。
+
+        Returns:
+            処理結果。
+        """
         class FakePage:
+            """FakePageのテスト用データ構造。"""
             def extract_text(self):
+                """extract_textを処理する。
+
+                Returns:
+                    処理結果。
+                """
                 return "4 & , * ɹɹ   "
 
         class FakeReader:
+            """FakeReaderのテスト用データ構造。"""
             pages = [FakePage(), FakePage(), FakePage()]
 
             def __init__(self, _path):
+                """__init__を処理する。
+
+                Args:
+                    _path: テスト用Readerに渡される未使用のパス。
+                """
                 pass
 
         class FakeFiles:
+            """FakeFilesのテスト用データ構造。"""
             def create(self, file, purpose):
+                """createを作成する。
+
+                Args:
+                    file: アップロード対象として渡されるファイル。
+                    purpose: OpenAI Files APIへ渡す用途。
+
+                Returns:
+                    処理結果。
+                """
                 return SimpleNamespace(id="file-1")
 
             def delete(self, file_id):
+                """テスト用にファイル削除APIの呼び出しを受け取る。
+
+                Args:
+                    file_id: 削除対象のOpenAIファイルID。
+
+                Returns:
+                    処理結果。
+                """
                 return None
 
         class FakeResponses:
+            """FakeResponsesのテスト用データ構造。"""
             def create(self, **kwargs):
+                """createを作成する。
+
+                Args:
+                    kwargs: 追加のキーワード引数。
+
+                Returns:
+                    処理結果。
+                """
                 return SimpleNamespace(output_text=json.dumps({
                     "table_pages": [
                         {"label": "床面積表", "page": 2, "confidence": 0.91},
@@ -1067,7 +1243,13 @@ class WallpaperEstimateTests(TestCase):
                 }))
 
         class FakeOpenAI:
+            """FakeOpenAIのテスト用データ構造。"""
             def __init__(self, api_key):
+                """__init__を処理する。
+
+                Args:
+                    api_key: テスト用OpenAIクライアントへ渡されるAPIキー。
+                """
                 self.files = FakeFiles()
                 self.responses = FakeResponses()
 
@@ -1080,6 +1262,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(pages, [("床面積表", 2), ("建具表", 3)])
 
     def test_room_candidate_validation_respects_floor_for_same_room_name(self):
+        """room candidate validation respects floor for same room nameを検証する。"""
         rooms = [
             AnalyzedRoom("1F トイレ", Decimal("4"), Decimal("2.4"), Decimal("0"), Decimal("1.4"), "根拠: 1F平面図"),
         ]
@@ -1094,6 +1277,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotIn("1F トイレ、", warnings[0])
 
     def test_room_candidate_validation_treats_same_floor_storage_bundle_as_displayed(self):
+        """room candidate validation treats same floor storage bundle as displayedを検証する。"""
         rooms = [
             AnalyzedRoom("1F 収納 一式", Decimal("0"), Decimal("2.4"), Decimal("0"), Decimal("2.48"), "根拠: 1F 収納群"),
         ]
@@ -1109,6 +1293,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("2F CL", warnings[0])
 
     def test_create_room_from_analysis_clamps_ai_values_to_db_limits(self):
+        """create room from analysis clamps ai values to db limitsを検証する。"""
         project = Project.objects.create(name="AI値丸め")
         wallpaper = Wallpaper.objects.get(number="001")
         room = AnalyzedRoom(
@@ -1137,6 +1322,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(created.ceiling_area_m2, Decimal("99999.99"))
 
     def test_project_table_pages_from_memo_reuses_detected_tables(self):
+        """project table pages from memo reuses detected tablesを検証する。"""
         memo = (
             "PDF AI読取: 1F平面図=5P、2F平面図=5P、"
             "室内仕上表=4P、建具表=10P、建具表=11P、建具表=10P。"
@@ -1148,6 +1334,7 @@ class WallpaperEstimateTests(TestCase):
         )
 
     def test_analyze_wallpaper_pdf_uses_ai_extraction_and_keeps_calculation_outside_ai(self):
+        """analyze wallpaper pdf uses ai extraction and keeps calculation outside aiを検証する。"""
         extracted_room = _parse_ai_analysis_response(json.dumps({
             "rooms": [
                 {
@@ -1174,6 +1361,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("壁紙量とロール本数はシステムの計算式で算出", result.memo)
 
     def test_analyze_wallpaper_pdf_warns_on_obviously_incomplete_room_extraction(self):
+        """analyze wallpaper pdf warns on obviously incomplete room extractionを検証する。"""
         extracted_rooms = _parse_ai_analysis_response(json.dumps({
             "rooms": [
                 {
@@ -1213,6 +1401,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("未抽出候補", result.memo)
 
     def test_analyze_wallpaper_pdf_warns_instead_of_failing_when_only_secondary_spaces_are_missing(self):
+        """analyze wallpaper pdf warns instead of failing when only secondary spaces are missingを検証する。"""
         extracted_rooms = _parse_ai_analysis_response(json.dumps({
             "rooms": [
                 {
@@ -1266,6 +1455,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertIn("補助空間候補", result.memo)
 
     def test_selected_pages_pdf_contains_only_requested_unique_pages(self):
+        """selected pages pdf contains only requested unique pagesを検証する。"""
         from pypdf import PdfReader, PdfWriter
 
         source_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
@@ -1297,6 +1487,7 @@ class WallpaperEstimateTests(TestCase):
 
     @override_settings(SUPABASE_URL="", SUPABASE_SECRET_KEY="", SUPABASE_BUCKET="pdfs")
     def test_project_create_does_not_fall_back_when_pdf_analysis_has_unexpected_error(self):
+        """project create does not fall back when pdf analysis has unexpected errorを検証する。"""
         self.client.force_login(self.user)
         with patch("estimator.views.analyze_wallpaper_pdf", side_effect=RuntimeError("boom")):
             response = self.client.post(
@@ -1321,6 +1512,7 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(str(response_messages[1]), "積算が作成できませんでした。")
 
     def test_project_recalculate_reads_pdf_again(self):
+        """project recalculate reads pdf againを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(name="再計算案件", drawing_pdf="drawings/dummy.pdf", uploaded_by=self.user)
         Room.objects.create(

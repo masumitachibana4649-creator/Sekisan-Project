@@ -1,3 +1,5 @@
+"""壁紙積算の案件、部屋、壁紙マスタ、初期値設定モデルを定義する。"""
+
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.db import models
@@ -38,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 class Wallpaper(models.Model):
+    """壁紙マスタを表すモデル。"""
     display_order = models.CharField("表示順", max_length=3, default="999")
     number = models.CharField("壁紙No.", max_length=3, unique=True)
     name = models.CharField("壁紙名称", max_length=80)
@@ -49,22 +52,39 @@ class Wallpaper(models.Model):
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 
     class Meta:
+        """モデルやフォームのメタ情報を定義する。"""
         ordering = ["display_order", "number"]
         verbose_name = "壁紙マスタ"
         verbose_name_plural = "壁紙マスタ"
 
     def __str__(self):
+        """画面表示用の文字列表現を返す。
+
+        Returns:
+            表示用の文字列。
+        """
         return f"{self.number}：{self.name}"
 
     @property
     def roll_area(self):
+        """1ロールあたりの面積を返す。
+
+        Returns:
+            処理結果。
+        """
         return self.roll_width_m * self.roll_length_m
 
     @property
     def is_none_wallpaper(self):
+        """壁紙無しを表すマスタかどうかを返す。
+
+        Returns:
+            処理結果。
+        """
         return self.number == "000"
 
     def clean(self):
+        """保存前に壁紙マスタの値を正規化・検証する。"""
         self.display_order = _normalize_code(self.display_order)
         self.number = _normalize_code(self.number)
         if self.number == "000":
@@ -88,11 +108,22 @@ class Wallpaper(models.Model):
             self.is_active = True
 
     def save(self, *args, **kwargs):
+        """モデル検証を行ってから保存する。
+
+        Args:
+            args: Django標準の保存処理へ渡す位置引数。
+            kwargs: 追加のキーワード引数。
+        """
         self.full_clean()
         super().save(*args, **kwargs)
 
     @classmethod
     def ensure_defaults(cls):
+        """必須の壁紙マスタを作成または取得する。
+
+        Returns:
+            壁紙無しと標準壁紙のタプル。
+        """
         none_wallpaper, _created = cls.objects.get_or_create(
             number="000",
             defaults={
@@ -121,6 +152,7 @@ class Wallpaper(models.Model):
 
 
 class Project(models.Model):
+    """壁紙積算の案件を表すモデル。"""
     name = models.CharField("案件名", max_length=120)
     client_name = models.CharField("顧客名", max_length=120, blank=True)
     drawing_pdf = models.FileField("図面PDF", upload_to="drawings/", blank=True)
@@ -159,19 +191,35 @@ class Project(models.Model):
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 
     class Meta:
+        """モデルやフォームのメタ情報を定義する。"""
         ordering = ["-updated_at"]
         verbose_name = "案件"
         verbose_name_plural = "案件"
 
     def __str__(self):
+        """画面表示用の文字列表現を返す。
+
+        Returns:
+            表示用の文字列。
+        """
         return self.name
 
     @property
     def has_drawing_pdf(self):
+        """案件に図面PDFが紐づいているかを返す。
+
+        Returns:
+            処理結果。
+        """
         return bool(self.drawing_pdf_storage_path or self.drawing_pdf)
 
     @property
     def drawing_pdf_filename(self):
+        """画面表示用の図面PDFファイル名を返す。
+
+        Returns:
+            処理結果。
+        """
         if self.drawing_pdf_original_name:
             return self.drawing_pdf_original_name
         if self.drawing_pdf:
@@ -179,6 +227,14 @@ class Project(models.Model):
         return "drawing.pdf"
 
     def can_view_drawing_pdf(self, user):
+        """指定ユーザーが図面PDFを閲覧できるかを返す。
+
+        Args:
+            user: 権限確認対象のユーザー。
+
+        Returns:
+            閲覧できる場合はTrue、それ以外はFalse。
+        """
         if not self.has_drawing_pdf:
             return False
         if not self.uploaded_by_id:
@@ -187,26 +243,56 @@ class Project(models.Model):
 
     @property
     def roll_area(self):
+        """1ロールあたりの面積を返す。
+
+        Returns:
+            処理結果。
+        """
         return self.wallpaper_roll_width_m * self.wallpaper_roll_length_m
 
     @property
     def subtotal_area(self):
+        """ロス率を含めない合計施工面積を返す。
+
+        Returns:
+            処理結果。
+        """
         return self.wallpaper_summary["total_base_area"]
 
     @property
     def total_area(self):
+        """ロス率を含めた合計必要面積を返す。
+
+        Returns:
+            処理結果。
+        """
         return self.wallpaper_summary["total_required_area"]
 
     @property
     def total_rolls(self):
+        """採用見積方式での合計ロール本数を返す。
+
+        Returns:
+            処理結果。
+        """
         return self.selected_estimate_totals["rolls"]
 
     @property
     def total_cost(self):
+        """採用見積方式での概算金額を返す。
+
+        Returns:
+            処理結果。
+        """
         return self.selected_estimate_totals["cost"]
 
     @property
     def selected_estimate_totals(self):
+        """採用見積方式に対応する合計値を返す。
+
+        Returns:
+            処理結果。
+        """
         summary = self.wallpaper_summary
         if self.adopted_estimate_method == ROOM_TOTAL_METHOD:
             return summary["room_total"]
@@ -214,6 +300,11 @@ class Project(models.Model):
 
     @property
     def wallpaper_summary(self):
+        """案件内の部屋情報から壁紙別・部屋別の集計を返す。
+
+        Returns:
+            処理結果。
+        """
         rooms = list(self.rooms.all())
         by_wallpaper = {}
         room_rolls = {}
@@ -288,6 +379,7 @@ class Project(models.Model):
 
 
 class EstimateDefaultSettings(models.Model):
+    """新規案件作成時に使用する初期値設定モデル。"""
     wallpaper_roll_width_m = models.DecimalField("ロール幅(m)", max_digits=5, decimal_places=2, default=Decimal("0.92"))
     wallpaper_roll_length_m = models.DecimalField("ロール長さ(m)", max_digits=5, decimal_places=2, default=Decimal("50"))
     loss_rate_percent = models.DecimalField("ロス率(%)", max_digits=5, decimal_places=1, default=Decimal("8"))
@@ -303,14 +395,25 @@ class EstimateDefaultSettings(models.Model):
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 
     class Meta:
+        """モデルやフォームのメタ情報を定義する。"""
         verbose_name = "初期値設定"
         verbose_name_plural = "初期値設定"
 
     def __str__(self):
+        """画面表示用の文字列表現を返す。
+
+        Returns:
+            表示用の文字列。
+        """
         return "新規案件の初期値"
 
     @classmethod
     def load(cls):
+        """新規案件の初期値設定を取得する。
+
+        Returns:
+            初期値設定インスタンス。
+        """
         Wallpaper.ensure_defaults()
         settings, _created = cls.objects.get_or_create(pk=1)
         if settings.default_wallpaper_id is None:
@@ -320,6 +423,7 @@ class EstimateDefaultSettings(models.Model):
 
 
 class Room(models.Model):
+    """案件内の部屋と面別の壁紙情報を表すモデル。"""
     project = models.ForeignKey(Project, related_name="rooms", on_delete=models.CASCADE)
     name = models.CharField("部屋名", max_length=80)
     source_type = models.CharField("部屋追加区分", max_length=16, choices=ROOM_SOURCE_CHOICES, default=ROOM_SOURCE_AI)
@@ -370,15 +474,26 @@ class Room(models.Model):
     ceiling_unit_price_per_roll = models.PositiveIntegerField("天井 1ロール単価", default=11800)
 
     class Meta:
+        """モデルやフォームのメタ情報を定義する。"""
         ordering = ["id"]
         verbose_name = "部屋"
         verbose_name_plural = "部屋"
 
     def __str__(self):
+        """画面表示用の文字列表現を返す。
+
+        Returns:
+            表示用の文字列。
+        """
         return f"{self.project.name} / {self.name}"
 
     @property
     def display_name(self):
+        """階数を含めた画面表示用の部屋名を返す。
+
+        Returns:
+            処理結果。
+        """
         floor = self.display_floor_label
         room_name = self.display_room_name
         if floor:
@@ -387,6 +502,11 @@ class Room(models.Model):
 
     @property
     def display_floor_label(self):
+        """部屋名や根拠情報から表示用の階数ラベルを返す。
+
+        Returns:
+            処理結果。
+        """
         name = str(self.name or "").strip()
         if self._is_multi_floor_room(name):
             return ""
@@ -395,6 +515,11 @@ class Room(models.Model):
 
     @property
     def display_room_name(self):
+        """階数表記を除いた表示用の部屋名を返す。
+
+        Returns:
+            処理結果。
+        """
         name = str(self.name or "").strip()
         if self._is_multi_floor_room(name):
             return name
@@ -404,6 +529,11 @@ class Room(models.Model):
         return name
 
     def _inferred_floor_label(self):
+        """部屋名や備考から階数ラベルを推定する。
+
+        Returns:
+            処理結果。
+        """
         source = self._ascii_digits(f"{self.name} {self.note}")
         match = re.search(r"([1-9])\s*(?:F|階)", source, re.IGNORECASE)
         if match:
@@ -411,6 +541,14 @@ class Room(models.Model):
         return self._floor_label_from_evidence_page(source)
 
     def _floor_label_from_evidence_page(self, source):
+        """根拠ページ番号から階数ラベルを推定する。
+
+        Args:
+            source: 階数やページ番号の判定に使う文字列。
+
+        Returns:
+            処理結果。
+        """
         page_matches = {
             "1F": self.project.page_1f_plan,
             "2F": self.project.page_2f_plan,
@@ -423,9 +561,25 @@ class Room(models.Model):
         return ""
 
     def _is_multi_floor_room(self, name):
+        """複数階にまたがる部屋名かどうかを返す。
+
+        Args:
+            name: 名前。
+
+        Returns:
+            処理結果。
+        """
         return any(keyword in name for keyword in ("吹抜", "吹き抜け"))
 
     def _remove_floor_labels(self, value):
+        """部屋名から階数表記を除去する。
+
+        Args:
+            value: 変換または正規化する値。
+
+        Returns:
+            処理結果。
+        """
         normalized = self._ascii_digits(value)
         normalized = re.sub(r"\b[1-9]\s*F\b", "", normalized, flags=re.IGNORECASE)
         normalized = re.sub(r"[1-9]\s*階", "", normalized)
@@ -433,10 +587,26 @@ class Room(models.Model):
 
     @staticmethod
     def _ascii_digits(value):
+        """全角数字を半角数字へ変換する。
+
+        Args:
+            value: 変換または正規化する値。
+
+        Returns:
+            処理結果。
+        """
         return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
 
     @classmethod
     def _page_number(cls, value):
+        """ページ指定文字列をページ番号へ変換する。
+
+        Args:
+            value: 変換または正規化する値。
+
+        Returns:
+            処理結果。
+        """
         normalized = cls._ascii_digits(value).strip()
         if normalized in {"", "-", "ー", "－", "なし", "無し", "0"}:
             return None
@@ -447,6 +617,11 @@ class Room(models.Model):
 
     @property
     def wall_area(self):
+        """部屋の壁面積を返す。
+
+        Returns:
+            処理結果。
+        """
         if self.has_surface_measurements:
             return sum((self.net_surface_area(field) for field, _label, surface_type in SURFACE_FIELDS if surface_type == "wall"), Decimal("0"))
         area = (self.perimeter_m * self.height_m) - self.opening_area_m2
@@ -454,6 +629,11 @@ class Room(models.Model):
 
     @property
     def has_surface_measurements(self):
+        """面別の面積または開口部面積が入力されているかを返す。
+
+        Returns:
+            処理結果。
+        """
         return any(
             getattr(self, f"{field}_surface_area_m2") > 0
             for field, _label, _surface_type in SURFACE_FIELDS
@@ -464,6 +644,14 @@ class Room(models.Model):
         )
 
     def net_surface_area(self, field):
+        """指定した面の開口部控除後面積を返す。
+
+        Args:
+            field: 対象の面またはフィールド名。
+
+        Returns:
+            処理結果。
+        """
         surface_area = getattr(self, f"{field}_surface_area_m2")
         if field == "ceiling":
             return max(surface_area, Decimal("0"))
@@ -472,18 +660,33 @@ class Room(models.Model):
 
     @property
     def wallpaper_area(self):
+        """壁紙無しを除いた施工面積を返す。
+
+        Returns:
+            処理結果。
+        """
         if self.excluded_from_summary:
             return Decimal("0")
         return sum((item["base_area"] for item in self.wallpaper_surface_items() if item["wallpaper_no"] != "000"), Decimal("0"))
 
     @property
     def total_area(self):
+        """ロス率を含めた合計必要面積を返す。
+
+        Returns:
+            処理結果。
+        """
         if self.excluded_from_summary:
             return Decimal("0")
         return sum((item["required_area"] for item in self.wallpaper_surface_items() if item["wallpaper_no"] != "000"), Decimal("0"))
 
     @property
     def rolls_required(self):
+        """部屋単位で必要なロール本数を返す。
+
+        Returns:
+            処理結果。
+        """
         if self.excluded_from_summary:
             return 0
         groups = {}
@@ -495,6 +698,11 @@ class Room(models.Model):
         return sum((_ceil_rolls(group["required_area"], group["roll_area"]) for group in groups.values()), start=0)
 
     def wallpaper_surface_items(self):
+        """部屋の各面ごとの壁紙積算情報を返す。
+
+        Returns:
+            処理結果。
+        """
         derived_wall_face_area = max((self.perimeter_m * self.height_m) - self.opening_area_m2, Decimal("0")) / Decimal("4")
         derived_wall_opening_area = self.opening_area_m2 / Decimal("4")
         use_surface_measurements = self.has_surface_measurements
@@ -541,10 +749,21 @@ class Room(models.Model):
         return items
 
     def apply_wallpaper_to_all_surfaces(self, wallpaper):
+        """指定した壁紙を部屋の全ての面へ適用する。
+
+        Args:
+            wallpaper: 適用する壁紙マスタ。
+        """
         for field, _label, _surface_type in SURFACE_FIELDS:
             self.apply_wallpaper(field, wallpaper)
 
     def apply_wallpaper(self, field, wallpaper):
+        """指定した面へ壁紙マスタの情報を適用する。
+
+        Args:
+            field: 対象の面またはフィールド名。
+            wallpaper: 適用する壁紙マスタ。
+        """
         setattr(self, f"{field}_wallpaper_no", wallpaper.number)
         setattr(self, f"{field}_wallpaper_name", wallpaper.name)
         setattr(self, f"{field}_roll_width_m", wallpaper.roll_width_m)
@@ -553,6 +772,7 @@ class Room(models.Model):
         setattr(self, f"{field}_unit_price_per_roll", wallpaper.unit_price_per_roll)
 
     def set_default_surface_measurements(self):
+        """周長・天井高・開口部から各面の初期面積を設定する。"""
         wall_gross_area = self.perimeter_m * self.height_m
         wall_surface_area = wall_gross_area / Decimal("4")
         wall_opening_area = self.opening_area_m2 / Decimal("4")
@@ -564,6 +784,7 @@ class Room(models.Model):
                 setattr(self, f"{field}_opening_area_m2", wall_opening_area)
 
     def sync_totals_from_surface_measurements(self):
+        """面別入力値から部屋全体の開口部面積と天井面積を同期する。"""
         self.opening_area_m2 = sum(
             (getattr(self, f"{field}_opening_area_m2") for field, _label, surface_type in SURFACE_FIELDS if surface_type == "wall"),
             Decimal("0"),
@@ -572,6 +793,14 @@ class Room(models.Model):
 
 
 def _normalize_code(value):
+    """壁紙No.や表示順を3桁コードへ正規化する。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        3桁にゼロ埋めしたコード文字列。
+    """
     try:
         number = int(str(value or "0"))
     except ValueError:
@@ -580,12 +809,29 @@ def _normalize_code(value):
 
 
 def _ceil_rolls(required_area, roll_area):
+    """必要面積からロール本数を切り上げ計算する。
+
+    Args:
+        required_area: 必要面積。
+        roll_area: 1ロールあたりの面積。
+
+    Returns:
+        切り上げ後の必要ロール本数。
+    """
     if roll_area <= 0 or required_area <= 0:
         return 0
     return int((required_area / roll_area).to_integral_value(rounding=ROUND_CEILING))
 
 
 def _empty_wallpaper_total(item):
+    """壁紙別集計行の初期値を作成する。
+
+    Args:
+        item: 壁紙集計用の面別情報。
+
+    Returns:
+        壁紙集計用の初期値辞書。
+    """
     return {
         "key": item["key"],
         "wallpaper_no": item["wallpaper_no"],
@@ -604,6 +850,13 @@ def _empty_wallpaper_total(item):
 
 @receiver(pre_save, sender=Project)
 def delete_replaced_project_pdf(sender, instance, **kwargs):
+    """案件のPDF差し替え時に未参照の旧PDFを削除する。
+
+    Args:
+        sender: Djangoシグナルの送信元モデル。
+        instance: Djangoシグナルで渡されるモデルインスタンス。
+        kwargs: 追加のキーワード引数。
+    """
     if not instance.pk:
         return
     old_path = (
@@ -618,11 +871,24 @@ def delete_replaced_project_pdf(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=Project)
 def delete_project_pdf(sender, instance, **kwargs):
+    """案件削除時に未参照のPDFを削除する。
+
+    Args:
+        sender: Djangoシグナルの送信元モデル。
+        instance: Djangoシグナルで渡されるモデルインスタンス。
+        kwargs: 追加のキーワード引数。
+    """
     if instance.drawing_pdf_storage_path:
         _delete_unreferenced_storage_pdf(instance.drawing_pdf_storage_path)
 
 
 def _delete_unreferenced_storage_pdf(object_path, excluding_pk=None):
+    """他案件から参照されていないStorage上のPDFを削除する。
+
+    Args:
+        object_path: Supabase Storage上のPDFパス。
+        excluding_pk: 参照確認から除外する案件ID。
+    """
     query = Project.objects.filter(drawing_pdf_storage_path=object_path)
     if excluding_pk:
         query = query.exclude(pk=excluding_pk)

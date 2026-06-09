@@ -1,3 +1,5 @@
+"""壁紙積算アプリのURLルーティングを定義する。"""
+
 from django.urls import path
 from django.contrib.auth.views import LogoutView
 
