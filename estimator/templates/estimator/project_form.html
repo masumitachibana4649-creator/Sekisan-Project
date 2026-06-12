@@ -62,6 +62,22 @@
       <label>3F天井伏図{% include "estimator/page_select.html" with name="page_3f_ceiling_plan" selected=default_page %}</label>
     </div>
   </section>
+
+  <section class="form-band">
+    <div class="section-heading">
+      <h2>表ページ指定</h2>
+    </div>
+    <p class="hint-text">表ページが分かる場合は指定してください。指定した表ページは自動検出より優先してAI読取対象に追加します。</p>
+    <div class="page-map-grid">
+      <label>床面積表{% include "estimator/page_select.html" with name="page_floor_area_table" selected=default_page %}</label>
+      <label>居室区画面積表{% include "estimator/page_select.html" with name="page_living_area_table" selected=default_page %}</label>
+      <label>室内仕上表{% include "estimator/page_select.html" with name="page_finish_table" selected=default_page %}</label>
+      <label>内部仕上表{% include "estimator/page_select.html" with name="page_internal_finish_table" selected=default_page %}</label>
+      <label>建具表開始頁{% include "estimator/page_select.html" with name="page_fixture_table_start" selected=default_page %}</label>
+      <label>建具表終了頁{% include "estimator/page_select.html" with name="page_fixture_table_end" selected=default_page %}</label>
+      <label class="wide">その他表ページ<input name="page_other_tables" placeholder="例: 14,22 または 10-13"></label>
+    </div>
+  </section>
 </form>
 
 <div class="loading-overlay" data-loading-overlay role="status" aria-live="polite" aria-hidden="true">

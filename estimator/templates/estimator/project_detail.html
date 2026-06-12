@@ -87,8 +87,12 @@
   </div>
   {% if project.memo or project.last_calculation_seconds is not None %}
     <div class="memo-box">
+      <p>解析状態：{{ project.get_analysis_status_display }}{% if project.analysis_model %} / モデル：{{ project.analysis_model }}{% endif %}</p>
       {% if project.last_calculation_seconds is not None %}
         <p>計算時間：{{ project.last_calculation_seconds }}秒</p>
+      {% endif %}
+      {% if project.analysis_error_message %}
+        <p>失敗理由：{{ project.analysis_error_message }}</p>
       {% endif %}
       {% if project.memo %}
         <p>{{ project.memo|sentence_breaks }}</p>
@@ -114,6 +118,15 @@
       <span>1F天井伏図: {{ project.page_1f_ceiling_plan }}</span>
       <span>2F天井伏図: {{ project.page_2f_ceiling_plan }}</span>
       <span>3F天井伏図: {{ project.page_3f_ceiling_plan }}</span>
+      <span>床面積表: {{ project.page_floor_area_table }}</span>
+      <span>居室区画面積表: {{ project.page_living_area_table }}</span>
+      <span>室内仕上表: {{ project.page_finish_table }}</span>
+      <span>内部仕上表: {{ project.page_internal_finish_table }}</span>
+      <span>建具表開始頁: {{ project.page_fixture_table_start }}</span>
+      <span>建具表終了頁: {{ project.page_fixture_table_end }}</span>
+      {% if project.page_other_tables %}
+        <span>その他表ページ: {{ project.page_other_tables }}</span>
+      {% endif %}
     </div>
   {% endif %}
   <div class="result-table">

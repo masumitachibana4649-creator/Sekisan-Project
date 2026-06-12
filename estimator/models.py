@@ -36,6 +36,20 @@ ROOM_SOURCE_CHOICES = (
     (ROOM_SOURCE_MANUAL, "手動追加"),
 )
 
+ANALYSIS_STATUS_NOT_STARTED = "not_started"
+ANALYSIS_STATUS_PENDING = "pending"
+ANALYSIS_STATUS_RUNNING = "running"
+ANALYSIS_STATUS_SUCCEEDED = "succeeded"
+ANALYSIS_STATUS_FAILED = "failed"
+
+ANALYSIS_STATUS_CHOICES = (
+    (ANALYSIS_STATUS_NOT_STARTED, "未実行"),
+    (ANALYSIS_STATUS_PENDING, "待機中"),
+    (ANALYSIS_STATUS_RUNNING, "解析中"),
+    (ANALYSIS_STATUS_SUCCEEDED, "解析完了"),
+    (ANALYSIS_STATUS_FAILED, "解析失敗"),
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -186,7 +200,24 @@ class Project(models.Model):
     page_1f_ceiling_plan = models.CharField("1F天井伏図ページ", max_length=8, default="ー")
     page_2f_ceiling_plan = models.CharField("2F天井伏図ページ", max_length=8, default="ー")
     page_3f_ceiling_plan = models.CharField("3F天井伏図ページ", max_length=8, default="ー")
+    page_floor_area_table = models.CharField("床面積表ページ", max_length=8, default="ー")
+    page_living_area_table = models.CharField("居室区画面積表ページ", max_length=8, default="ー")
+    page_finish_table = models.CharField("室内仕上表ページ", max_length=8, default="ー")
+    page_internal_finish_table = models.CharField("内部仕上表ページ", max_length=8, default="ー")
+    page_fixture_table_start = models.CharField("建具表開始ページ", max_length=8, default="ー")
+    page_fixture_table_end = models.CharField("建具表終了ページ", max_length=8, default="ー")
+    page_other_tables = models.CharField("その他表ページ", max_length=80, blank=True, default="")
     memo = models.TextField("メモ", blank=True)
+    analysis_status = models.CharField(
+        "解析ステータス",
+        max_length=20,
+        choices=ANALYSIS_STATUS_CHOICES,
+        default=ANALYSIS_STATUS_NOT_STARTED,
+    )
+    analysis_error_message = models.TextField("解析エラーメッセージ", blank=True)
+    analysis_started_at = models.DateTimeField("解析開始日時", null=True, blank=True)
+    analysis_finished_at = models.DateTimeField("解析終了日時", null=True, blank=True)
+    analysis_model = models.CharField("解析モデル", max_length=80, blank=True)
     last_calculation_seconds = models.PositiveIntegerField("直近計算時間(秒)", null=True, blank=True)
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)

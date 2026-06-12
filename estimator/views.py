@@ -20,9 +20,13 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.urls import reverse
 
 from .models import (
+    ANALYSIS_STATUS_FAILED,
+    ANALYSIS_STATUS_RUNNING,
+    ANALYSIS_STATUS_SUCCEEDED,
     ESTIMATE_METHOD_CHOICES,
     ROOM_SOURCE_AI,
     ROOM_SOURCE_AI_MISSING,
@@ -161,6 +165,13 @@ def project_create(request):
                 page_1f_ceiling_plan=_page_value(request.POST.get("page_1f_ceiling_plan"), "ー"),
                 page_2f_ceiling_plan=_page_value(request.POST.get("page_2f_ceiling_plan"), "ー"),
                 page_3f_ceiling_plan=_page_value(request.POST.get("page_3f_ceiling_plan"), "ー"),
+                page_floor_area_table=_page_value(request.POST.get("page_floor_area_table"), "ー"),
+                page_living_area_table=_page_value(request.POST.get("page_living_area_table"), "ー"),
+                page_finish_table=_page_value(request.POST.get("page_finish_table"), "ー"),
+                page_internal_finish_table=_page_value(request.POST.get("page_internal_finish_table"), "ー"),
+                page_fixture_table_start=_page_value(request.POST.get("page_fixture_table_start"), "ー"),
+                page_fixture_table_end=_page_value(request.POST.get("page_fixture_table_end"), "ー"),
+                page_other_tables=(request.POST.get("page_other_tables") or "").strip(),
                 memo=request.POST.get("memo", ""),
                 **pdf_fields,
             )
@@ -968,14 +979,28 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
         return False
 
     started_at = time.monotonic()
+    project.analysis_status = ANALYSIS_STATUS_RUNNING
+    project.analysis_started_at = timezone.now()
+    project.analysis_finished_at = None
+    project.analysis_error_message = ""
+    project.analysis_model = getattr(settings, "OPENAI_PDF_ANALYSIS_MODEL", "") or ""
+    project.save(update_fields=[
+        "analysis_status",
+        "analysis_started_at",
+        "analysis_finished_at",
+        "analysis_error_message",
+        "analysis_model",
+    ])
     try:
         close_old_connections()
+        explicit_table_pages = _project_explicit_table_pages(project)
+        memo_table_pages = _project_table_pages_from_memo(project.memo) if replace_rooms else None
         with _drawing_pdf_path(project) as pdf_path:
             analysis = analyze_wallpaper_pdf(
                 pdf_path,
                 _project_page_map(project),
-                table_pages=_project_table_pages_from_memo(project.memo) if replace_rooms else None,
-                allow_visual_table_detection=not replace_rooms,
+                table_pages=explicit_table_pages or memo_table_pages,
+                allow_visual_table_detection=not replace_rooms and not explicit_table_pages,
             )
         if replace_rooms:
             project.rooms.all().delete()
@@ -989,13 +1014,22 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
         )
         project.memo = _join_memo(project.memo, analysis.memo)
         project.last_calculation_seconds = _elapsed_seconds(started_at)
-        project.save(update_fields=["memo", "last_calculation_seconds"])
+        project.analysis_status = ANALYSIS_STATUS_SUCCEEDED
+        project.analysis_finished_at = timezone.now()
+        project.analysis_error_message = ""
+        project.save(update_fields=[
+            "memo",
+            "last_calculation_seconds",
+            "analysis_status",
+            "analysis_finished_at",
+            "analysis_error_message",
+        ])
         return True
     except ValueError as exc:
-        _save_calculation_seconds(project, started_at)
+        _mark_analysis_failed(project, started_at, str(exc))
         messages.error(request, f"PDF自動読取はできませんでした。理由: {exc}")
-    except Exception:
-        _save_calculation_seconds(project, started_at)
+    except Exception as exc:
+        _mark_analysis_failed(project, started_at, str(exc))
         logger.exception("Unexpected PDF analysis error for project %s", project.pk)
         messages.error(request, "PDF自動読取中に予期しないエラーが発生しました。")
     finally:
@@ -1013,6 +1047,88 @@ def _save_calculation_seconds(project, started_at):
         project.save(update_fields=["last_calculation_seconds"])
     except Exception:
         logger.exception("Could not save calculation duration for project %s", project.pk)
+
+
+def _mark_analysis_failed(project, started_at, error_message):
+    project.analysis_status = ANALYSIS_STATUS_FAILED
+    project.analysis_finished_at = timezone.now()
+    project.analysis_error_message = _truncate_error_message(error_message)
+    project.last_calculation_seconds = _elapsed_seconds(started_at)
+    try:
+        project.save(update_fields=[
+            "analysis_status",
+            "analysis_finished_at",
+            "analysis_error_message",
+            "last_calculation_seconds",
+        ])
+    except Exception:
+        logger.exception("Could not save analysis failure for project %s", project.pk)
+
+
+def _truncate_error_message(value):
+    return str(value or "").strip()[:2000]
+
+
+def _project_explicit_table_pages(project):
+    pages = []
+    pages.extend(_single_table_page("床面積表", project.page_floor_area_table))
+    pages.extend(_single_table_page("居室区画面積表", project.page_living_area_table))
+    pages.extend(_single_table_page("室内仕上表", project.page_finish_table))
+    pages.extend(_single_table_page("内部仕上表", project.page_internal_finish_table))
+    pages.extend(_range_table_pages("建具表", project.page_fixture_table_start, project.page_fixture_table_end))
+    pages.extend(_range_table_pages("その他表ページ", project.page_other_tables, "ー"))
+    return _deduplicate_table_pages(pages) or None
+
+
+def _single_table_page(label, value):
+    page = _optional_page_number(value)
+    return [(label, page)] if page else []
+
+
+def _range_table_pages(label, start_value, end_value):
+    start_pages = _page_number_list(start_value)
+    if not start_pages:
+        return []
+    end_page = _optional_page_number(end_value)
+    if len(start_pages) == 1 and end_page and end_page >= start_pages[0]:
+        return [(label, page) for page in range(start_pages[0], end_page + 1)]
+    return [(label, page) for page in start_pages]
+
+
+def _page_number_list(value):
+    normalized = str(value or "").strip()
+    if normalized in {"", "-", "ー", "－", "なし", "無し", "0"}:
+        return []
+    numbers = []
+    for part in re.split(r"[,\s、]+", normalized):
+        if not part:
+            continue
+        range_match = re.fullmatch(r"(\d+)\s*[-~〜]\s*(\d+)", part)
+        if range_match:
+            start, end = int(range_match.group(1)), int(range_match.group(2))
+            if start <= end:
+                numbers.extend(range(start, end + 1))
+            continue
+        if part.isdigit():
+            numbers.append(int(part))
+    return [number for number in numbers if number > 0]
+
+
+def _optional_page_number(value):
+    numbers = _page_number_list(value)
+    return numbers[0] if numbers else None
+
+
+def _deduplicate_table_pages(table_pages):
+    deduplicated = []
+    seen = set()
+    for label, page in table_pages:
+        key = (label, page)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduplicated.append((label, page))
+    return deduplicated
 
 
 def _project_table_pages_from_memo(memo):
@@ -1243,7 +1359,20 @@ def _clone_project(project, name):
         page_1f_ceiling_plan=project.page_1f_ceiling_plan,
         page_2f_ceiling_plan=project.page_2f_ceiling_plan,
         page_3f_ceiling_plan=project.page_3f_ceiling_plan,
+        page_floor_area_table=project.page_floor_area_table,
+        page_living_area_table=project.page_living_area_table,
+        page_finish_table=project.page_finish_table,
+        page_internal_finish_table=project.page_internal_finish_table,
+        page_fixture_table_start=project.page_fixture_table_start,
+        page_fixture_table_end=project.page_fixture_table_end,
+        page_other_tables=project.page_other_tables,
         memo=project.memo,
+        analysis_status=project.analysis_status,
+        analysis_error_message=project.analysis_error_message,
+        analysis_started_at=project.analysis_started_at,
+        analysis_finished_at=project.analysis_finished_at,
+        analysis_model=project.analysis_model,
+        last_calculation_seconds=project.last_calculation_seconds,
     )
     return clone
 

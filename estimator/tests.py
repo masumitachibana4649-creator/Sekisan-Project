@@ -15,7 +15,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .admin import ProjectAdmin, WallpaperAdmin
-from .models import ROOM_TOTAL_METHOD, Project, Room, Wallpaper
+from .models import ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_SUCCEEDED, ROOM_TOTAL_METHOD, Project, Room, Wallpaper
 from .pdf_analysis import (
     AnalyzedRoom,
     PdfAnalysisResult,
@@ -35,6 +35,7 @@ from .pdf_analysis import (
 )
 from .views import _create_rooms_from_analysis
 from .views import _create_room_from_analysis
+from .views import _project_explicit_table_pages
 from .views import _project_table_pages_from_memo
 from .templatetags.estimate_extras import room_note, sentence_breaks
 
@@ -106,6 +107,7 @@ class WallpaperEstimateTests(TestCase):
         project = Project.objects.get(name="橘邸")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
         self.assertEqual(project.uploaded_by, self.user)
+        self.assertEqual(project.analysis_status, ANALYSIS_STATUS_SUCCEEDED)
         self.assertIsNotNone(project.last_calculation_seconds)
         self.assertEqual(project.rooms.count(), 1)
         room = project.rooms.get()
@@ -435,8 +437,37 @@ class WallpaperEstimateTests(TestCase):
         response = self.client.get(reverse("project_detail", args=[project.pk]))
 
         self.assertContains(response, "計算時間：219秒")
+        self.assertContains(response, "解析状態：未実行")
         self.assertContains(response, "入力した内容です。<br><br>PDF読取説明です。<br>", html=False)
         self.assertNotContains(response, "<strong>メモ</strong>", html=False)
+
+    def test_project_explicit_table_pages_uses_page_fields(self):
+        """明示指定した表ページをAI読取対象候補として組み立てる。"""
+        project = Project(
+            page_floor_area_table="14",
+            page_living_area_table="22",
+            page_finish_table="4",
+            page_internal_finish_table="ー",
+            page_fixture_table_start="10",
+            page_fixture_table_end="13",
+            page_other_tables="15, 18-19",
+        )
+
+        self.assertEqual(
+            _project_explicit_table_pages(project),
+            [
+                ("床面積表", 14),
+                ("居室区画面積表", 22),
+                ("室内仕上表", 4),
+                ("建具表", 10),
+                ("建具表", 11),
+                ("建具表", 12),
+                ("建具表", 13),
+                ("その他表ページ", 15),
+                ("その他表ページ", 18),
+                ("その他表ページ", 19),
+            ],
+        )
 
     def test_project_detail_room_detail_labels_include_units(self):
         """project detail room detail labels include unitsを検証する。"""
@@ -1513,6 +1544,8 @@ class WallpaperEstimateTests(TestCase):
         project = Project.objects.get(name="PDFエラー案件")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
         self.assertEqual(project.rooms.count(), 0)
+        self.assertEqual(project.analysis_status, ANALYSIS_STATUS_FAILED)
+        self.assertIn("boom", project.analysis_error_message)
         self.assertIsNotNone(project.last_calculation_seconds)
         response_messages = list(get_messages(response.wsgi_request))
         self.assertEqual([message.tags for message in response_messages], ["error", "error"])
@@ -1543,6 +1576,7 @@ class WallpaperEstimateTests(TestCase):
 
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
         project.refresh_from_db()
+        self.assertEqual(project.analysis_status, ANALYSIS_STATUS_SUCCEEDED)
         self.assertIsNotNone(project.last_calculation_seconds)
         self.assertEqual(list(project.rooms.values_list("name", flat=True)), ["新しいLDK"])
 
