@@ -187,6 +187,7 @@ class Project(models.Model):
     page_2f_ceiling_plan = models.CharField("2F天井伏図ページ", max_length=8, default="ー")
     page_3f_ceiling_plan = models.CharField("3F天井伏図ページ", max_length=8, default="ー")
     memo = models.TextField("メモ", blank=True)
+    last_calculation_seconds = models.PositiveIntegerField("直近計算時間(秒)", null=True, blank=True)
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 

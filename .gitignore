@@ -6,3 +6,4 @@ media/
 staticfiles/
 .env
 db_migration_backup.json
+outputs/

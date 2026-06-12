@@ -106,6 +106,7 @@ class WallpaperEstimateTests(TestCase):
         project = Project.objects.get(name="橘邸")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
         self.assertEqual(project.uploaded_by, self.user)
+        self.assertIsNotNone(project.last_calculation_seconds)
         self.assertEqual(project.rooms.count(), 1)
         room = project.rooms.get()
         self.assertEqual(room.east_surface_area_m2, Decimal("10.01"))
@@ -424,10 +425,16 @@ class WallpaperEstimateTests(TestCase):
     def test_project_detail_shows_entered_memo_without_fixed_title(self):
         """project detail shows entered memo without fixed titleを検証する。"""
         self.client.force_login(self.user)
-        project = Project.objects.create(name="メモ表示テスト", memo="入力した内容です。\nPDF読取説明です。", uploaded_by=self.user)
+        project = Project.objects.create(
+            name="メモ表示テスト",
+            memo="入力した内容です。\nPDF読取説明です。",
+            last_calculation_seconds=219,
+            uploaded_by=self.user,
+        )
 
         response = self.client.get(reverse("project_detail", args=[project.pk]))
 
+        self.assertContains(response, "計算時間：219秒")
         self.assertContains(response, "入力した内容です。<br><br>PDF読取説明です。<br>", html=False)
         self.assertNotContains(response, "<strong>メモ</strong>", html=False)
 
@@ -1506,6 +1513,7 @@ class WallpaperEstimateTests(TestCase):
         project = Project.objects.get(name="PDFエラー案件")
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
         self.assertEqual(project.rooms.count(), 0)
+        self.assertIsNotNone(project.last_calculation_seconds)
         response_messages = list(get_messages(response.wsgi_request))
         self.assertEqual([message.tags for message in response_messages], ["error", "error"])
         self.assertIn("PDF自動読取中に予期しないエラーが発生しました。", str(response_messages[0]))
@@ -1534,6 +1542,8 @@ class WallpaperEstimateTests(TestCase):
             response = self.client.post(reverse("project_recalculate", args=[project.pk]))
 
         self.assertRedirects(response, reverse("project_detail", args=[project.pk]))
+        project.refresh_from_db()
+        self.assertIsNotNone(project.last_calculation_seconds)
         self.assertEqual(list(project.rooms.values_list("name", flat=True)), ["新しいLDK"])
 
 # Create your tests here.

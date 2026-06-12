@@ -4,6 +4,7 @@ import csv
 import logging
 import re
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -966,6 +967,7 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
         messages.error(request, "PDF自動読取はできませんでした。理由: 図面PDFが登録されていません。")
         return False
 
+    started_at = time.monotonic()
     try:
         close_old_connections()
         with _drawing_pdf_path(project) as pdf_path:
@@ -986,16 +988,31 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
             room_candidates=analysis.room_candidates,
         )
         project.memo = _join_memo(project.memo, analysis.memo)
-        project.save(update_fields=["memo"])
+        project.last_calculation_seconds = _elapsed_seconds(started_at)
+        project.save(update_fields=["memo", "last_calculation_seconds"])
         return True
     except ValueError as exc:
+        _save_calculation_seconds(project, started_at)
         messages.error(request, f"PDF自動読取はできませんでした。理由: {exc}")
     except Exception:
+        _save_calculation_seconds(project, started_at)
         logger.exception("Unexpected PDF analysis error for project %s", project.pk)
         messages.error(request, "PDF自動読取中に予期しないエラーが発生しました。")
     finally:
         close_old_connections()
     return False
+
+
+def _elapsed_seconds(started_at):
+    return max(0, int(round(time.monotonic() - started_at)))
+
+
+def _save_calculation_seconds(project, started_at):
+    project.last_calculation_seconds = _elapsed_seconds(started_at)
+    try:
+        project.save(update_fields=["last_calculation_seconds"])
+    except Exception:
+        logger.exception("Could not save calculation duration for project %s", project.pk)
 
 
 def _project_table_pages_from_memo(memo):

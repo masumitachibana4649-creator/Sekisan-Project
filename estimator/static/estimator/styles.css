@@ -840,6 +840,14 @@ textarea { resize: vertical; }
   color: var(--muted);
 }
 
+.memo-box p {
+  margin: 0;
+}
+
+.memo-box p + p {
+  margin-top: 12px;
+}
+
 .estimate-note,
 .estimated-value {
   color: #1565c0;

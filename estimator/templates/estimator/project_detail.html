@@ -85,8 +85,15 @@
       {% endif %}
     </div>
   </div>
-  {% if project.memo %}
-    <p class="memo-box">{{ project.memo|sentence_breaks }}</p>
+  {% if project.memo or project.last_calculation_seconds is not None %}
+    <div class="memo-box">
+      {% if project.last_calculation_seconds is not None %}
+        <p>計算時間：{{ project.last_calculation_seconds }}秒</p>
+      {% endif %}
+      {% if project.memo %}
+        <p>{{ project.memo|sentence_breaks }}</p>
+      {% endif %}
+    </div>
   {% endif %}
   {% if has_estimated_openings %}
     <p class="estimate-note">青文字は展開図・平面図の縮尺と既知寸法からの推定値なので注意</p>
