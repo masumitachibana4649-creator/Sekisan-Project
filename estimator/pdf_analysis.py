@@ -159,6 +159,13 @@ ANALYSIS_PROMPT_RULES = """ルール:
 - 不確かな値は evidence に根拠と推定理由を書き、confidence を下げてください。
 - ロール本数、ロス率込み面積、金額は計算しないでください。アプリ側で計算します。"""
 
+ANALYSIS_PROMPT_FINAL_CHECK = """最終チェック:
+- 表ページ候補のうち対象室が rooms または missing_rooms に全件含まれているか確認してください。
+- 平面図・天井伏図の主要室が漏れていないか確認してください。
+- 階違い同名部屋を統合していないか確認してください。
+- 全室の wall_surfaces が face_1〜face_4 を持っているか確認してください。
+- 表ページ候補の面積がある部屋は ceiling_area_m2 に採用されているか確認してください。"""
+
 
 def analyze_wallpaper_pdf(pdf_path, page_map=None, table_pages=None, allow_visual_table_detection=True):
     """PDF図面を解析して壁紙積算用の部屋情報を抽出する。
@@ -469,6 +476,8 @@ def _analysis_prompt(parsed_pages, expected_counts=None, table_pages=None, room_
 {ANALYSIS_PROMPT_TARGETS}
 
 {ANALYSIS_PROMPT_RULES}
+
+{ANALYSIS_PROMPT_FINAL_CHECK}
 """.strip()
 
 
