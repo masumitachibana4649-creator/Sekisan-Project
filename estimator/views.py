@@ -65,7 +65,7 @@ def signup(request):
         request: HTTPリクエスト。
 
     Returns:
-        処理結果。
+        登録フォーム画面または登録後のリダイレクトレスポンス。
     """
     if request.user.is_authenticated:
         return redirect("dashboard")
@@ -93,7 +93,7 @@ def dashboard(request):
         request: HTTPリクエスト。
 
     Returns:
-        処理結果。
+        案件一覧画面のHTTPレスポンス。
     """
     projects = Project.objects.none()
     if request.user.is_authenticated:
@@ -113,7 +113,7 @@ def about(request):
         request: HTTPリクエスト。
 
     Returns:
-        処理結果。
+        アプリ説明画面のHTTPレスポンス。
     """
     return render(request, "estimator/about.html")
 
@@ -126,7 +126,7 @@ def project_create(request):
         request: HTTPリクエスト。
 
     Returns:
-        処理結果。
+        案件作成フォーム画面または作成後のリダイレクトレスポンス。
     """
     defaults = EstimateDefaultSettings.load()
     wallpapers = _selectable_wallpapers()
@@ -208,7 +208,7 @@ def project_detail(request, pk):
         pk: 対象レコードの主キー。
 
     Returns:
-        処理結果。
+        案件詳細画面のHTTPレスポンス。
     """
     project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     rooms = project.rooms.all()
@@ -244,7 +244,7 @@ def project_save_wallpapers(request, pk):
         pk: 対象レコードの主キー。
 
     Returns:
-        処理結果。
+        保存後の案件詳細画面へのリダイレクトレスポンス。
     """
     source_project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     if request.method != "POST":
@@ -325,7 +325,7 @@ def project_recalculate(request, pk):
         pk: 対象レコードの主キー。
 
     Returns:
-        処理結果。
+        再解析後の案件詳細画面へのリダイレクトレスポンス。
     """
     project = _owned_project_or_403(request, Project, pk)
     if request.method != "POST":
@@ -348,7 +348,7 @@ def project_pdf(request, pk):
         pk: 対象レコードの主キー。
 
     Returns:
-        処理結果。
+        図面PDFのレスポンスまたは署名付きURLへのリダイレクト。
     """
     project = _owned_project_or_403(request, Project, pk)
     if not project.has_drawing_pdf:
@@ -381,7 +381,7 @@ def project_csv(request, pk):
         pk: 対象レコードの主キー。
 
     Returns:
-        処理結果。
+        積算明細CSVのHTTPレスポンス。
     """
     project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
     response = HttpResponse(content_type="text/csv; charset=utf-8")
@@ -474,7 +474,7 @@ def project_csv(request, pk):
 
 
 def _owned_project_or_403(request, queryset, pk):
-    """_owned_project_or_403を処理する。
+    """ログインユーザーが所有する案件を取得する。
 
     Args:
         request: HTTPリクエスト。
@@ -482,7 +482,7 @@ def _owned_project_or_403(request, queryset, pk):
         pk: 対象レコードの主キー。
 
     Returns:
-        処理結果。
+        所有者確認済みの案件。
     """
     if not request.user.is_authenticated:
         return _raise_forbidden()
@@ -493,7 +493,7 @@ def _owned_project_or_403(request, queryset, pk):
 
 
 def _raise_forbidden():
-    """_raise_forbiddenを処理する。"""
+    """案件閲覧権限がない場合の例外を送出する。"""
     raise PermissionDenied("この積算データを表示する権限がありません。")
 
 
@@ -505,7 +505,7 @@ def _create_rooms_from_analysis(
     missing_rooms=None,
     room_candidates=None,
 ):
-    """_create_rooms_from_analysisを作成する。
+    """PDF解析結果と不足候補から案件の部屋レコードを作成する。
 
     Args:
         project: 処理対象の案件。
@@ -539,7 +539,7 @@ def _create_rooms_from_analysis(
 
 
 def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpaper):
-    """_create_room_from_analysisを作成する。
+    """AI解析済みの部屋情報から部屋レコードを作成する。
 
     Args:
         project: 処理対象の案件。
@@ -578,7 +578,7 @@ def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpa
 
 
 def _create_empty_room(project, name, source_type, note, default_wallpaper, surface_wallpapers=None, ceiling_area_m2=Decimal("0")):
-    """_create_empty_roomを作成する。
+    """面積未入力の部屋レコードを作成する。
 
     Args:
         project: 処理対象の案件。
@@ -590,7 +590,7 @@ def _create_empty_room(project, name, source_type, note, default_wallpaper, surf
         ceiling_area_m2: 天井面積。
 
     Returns:
-        処理結果。
+        作成した部屋。
     """
     room = Room(
         project=project,
@@ -613,20 +613,20 @@ def _create_empty_room(project, name, source_type, note, default_wallpaper, surf
 
 
 def _missing_room_names(missing_rooms, analyzed_rooms):
-    """_missing_room_namesを処理する。
+    """AI解析で不足している部屋名だけを返す。
 
     Args:
         missing_rooms: 抽出できなかった部屋名の一覧。
         analyzed_rooms: AI解析済みの部屋一覧。
 
     Returns:
-        処理結果。
+        不足している部屋名の一覧。
     """
     return [missing_room["name"] for missing_room in _missing_room_specs(missing_rooms, analyzed_rooms)]
 
 
 def _missing_room_specs(missing_rooms, analyzed_rooms, room_candidates=None):
-    """_missing_room_specsを処理する。
+    """AI解析で不足している部屋の追加用情報を作る。
 
     Args:
         missing_rooms: 抽出できなかった部屋名の一覧。
@@ -634,7 +634,7 @@ def _missing_room_specs(missing_rooms, analyzed_rooms, room_candidates=None):
         room_candidates: 表ページなどから検出した部屋候補。
 
     Returns:
-        処理結果。
+        不足部屋の名前、天井面積、備考を持つ辞書の一覧。
     """
     if room_candidates:
         return _missing_room_specs_from_candidates(room_candidates, analyzed_rooms, missing_rooms)
@@ -656,7 +656,7 @@ def _missing_room_specs(missing_rooms, analyzed_rooms, room_candidates=None):
 
 
 def _missing_room_specs_from_candidates(room_candidates, analyzed_rooms, missing_rooms):
-    """_missing_room_specs_from_candidatesを処理する。
+    """表ページ候補からAI解析に出ていない部屋の追加用情報を作る。
 
     Args:
         room_candidates: 表ページなどから検出した部屋候補。
@@ -664,7 +664,7 @@ def _missing_room_specs_from_candidates(room_candidates, analyzed_rooms, missing
         missing_rooms: 抽出できなかった部屋名の一覧。
 
     Returns:
-        処理結果。
+        不足部屋の名前、天井面積、備考を持つ辞書の一覧。
     """
     extracted = set()
     for room in analyzed_rooms:
@@ -687,13 +687,13 @@ def _missing_room_specs_from_candidates(room_candidates, analyzed_rooms, missing
 
 
 def _candidate_room_name(candidate):
-    """_candidate_room_nameを処理する。
+    """部屋候補の階数を含む表示名を返す。
 
     Args:
         candidate: 部屋候補。
 
     Returns:
-        処理結果。
+        階数付きの部屋候補名。
     """
     if _floor_label_from_text(candidate.name):
         return candidate.name
@@ -708,7 +708,7 @@ def _room_match_keys(name, note=""):
         note: 備考。
 
     Returns:
-        処理結果。
+        部屋名照合に使う正規化済みキーの集合。
     """
     normalized = _normalize_room_name(name)
     keys = {normalized} if normalized else set()
@@ -728,7 +728,7 @@ def _candidate_match_keys(candidate):
         candidate: 部屋候補。
 
     Returns:
-        処理結果。
+        部屋候補照合に使う正規化済みキーの集合。
     """
     if candidate.floor:
         return {_normalize_room_name(f"{candidate.floor} {candidate.name}")}
@@ -742,7 +742,7 @@ def _normalize_room_name(value):
         value: 変換または正規化する値。
 
     Returns:
-        処理結果。
+        照合用に正規化した部屋名。
     """
     return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789")).upper().replace(" ", "")
 
@@ -754,7 +754,7 @@ def _floor_label_from_text(value):
         value: 変換または正規化する値。
 
     Returns:
-        処理結果。
+        検出した階数ラベル。見つからない場合は空文字。
     """
     source = str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
     match = re.search(r"([1-3])\s*(?:F|階)", source, re.IGNORECASE)
@@ -764,7 +764,7 @@ def _floor_label_from_text(value):
 
 
 def _create_manual_rooms_from_post(post_data, project, default_wallpaper, wallpaper_map=None):
-    """_create_manual_rooms_from_postを作成する。
+    """POSTされた手動追加欄から部屋レコードを作成する。
 
     Args:
         post_data: POSTされたフォームデータ。
@@ -811,14 +811,14 @@ def _create_manual_rooms_from_post(post_data, project, default_wallpaper, wallpa
 
 
 def _wall_surface_value(wall_surfaces, field):
-    """_wall_surface_valueを処理する。
+    """AI解析の面情報から対象フィールドの壁面情報を取り出す。
 
     Args:
         wall_surfaces: 1面から4面までの壁面情報。
         field: 対象の面またはフィールド名。
 
     Returns:
-        処理結果。
+        対象面の壁面情報。見つからない場合は空の辞書。
     """
     face_keys = {
         "east": "face_1",
@@ -830,14 +830,14 @@ def _wall_surface_value(wall_surfaces, field):
 
 
 def _wall_surface_area(surface, height_m):
-    """_wall_surface_areaを処理する。
+    """面幅または面積から保存用の壁面積を算出する。
 
     Args:
         surface: AI解析で返された面情報。
         height_m: 天井高。
 
     Returns:
-        処理結果。
+        保存可能な範囲に丸めた壁面積。
     """
     width = surface.get("width_m", Decimal("0"))
     if width > 0:
@@ -846,14 +846,14 @@ def _wall_surface_area(surface, height_m):
 
 
 def _room_measurement(value, max_value):
-    """_room_measurementを処理する。
+    """部屋寸法値をDecimalへ変換し、保存可能な範囲へ丸める。
 
     Args:
         value: 変換または正規化する値。
         max_value: DB保存前に許容する最大値。
 
     Returns:
-        処理結果。
+        0以上かつ最大値以下に正規化したDecimal値。
     """
     try:
         measurement = Decimal(str(value if value is not None else "0")).quantize(Decimal("0.01"))
@@ -865,14 +865,14 @@ def _room_measurement(value, max_value):
 
 
 def _truncate_text(value, max_length):
-    """_truncate_textを処理する。
+    """文字列をDB保存可能な長さへ切り詰める。
 
     Args:
         value: 変換または正規化する値。
         max_length: DB保存前に許容する最大文字数。
 
     Returns:
-        処理結果。
+        前後空白を除去し、最大文字数内に収めた文字列。
     """
     text = str(value or "").strip()
     if max_length and len(text) > max_length:
@@ -900,14 +900,14 @@ def _validate_drawing_pdf(uploaded_file):
 
 
 def _save_uploaded_drawing_pdf(uploaded_file, user):
-    """_save_uploaded_drawing_pdfを保存する。
+    """アップロードPDFをローカルまたはSupabase Storageへ保存する。
 
     Args:
         uploaded_file: アップロードされたPDFファイル。
-        user: 権限確認対象のユーザー。
+        user: アップロードしたユーザー。
 
     Returns:
-        処理結果。
+        Project作成時に渡すPDF関連フィールド。
     """
     if not storage.is_configured():
         return {
@@ -928,13 +928,13 @@ def _save_uploaded_drawing_pdf(uploaded_file, user):
 
 
 def _drawing_pdf_object_path(user):
-    """_drawing_pdf_object_pathを処理する。
+    """Storage上でPDFを保存するオブジェクトパスを生成する。
 
     Args:
-        user: 権限確認対象のユーザー。
+        user: アップロードしたユーザー。
 
     Returns:
-        処理結果。
+        ユーザーIDとUUIDを含むPDFオブジェクトパス。
     """
     user_id = user.pk if user.is_authenticated else "anonymous"
     return f"{user_id}/{uuid.uuid4()}.pdf"
@@ -942,7 +942,7 @@ def _drawing_pdf_object_path(user):
 
 @contextmanager
 def _drawing_pdf_path(project):
-    """_drawing_pdf_pathを処理する。
+    """解析用に参照できる図面PDFのローカルパスを一時的に用意する。
 
     Args:
         project: 処理対象の案件。
@@ -972,7 +972,7 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
         surface_wallpapers: 面ごとに適用する壁紙マスタ。
 
     Returns:
-        処理結果。
+        解析と部屋反映に成功した場合はTrue。
     """
     if not project.has_drawing_pdf:
         messages.error(request, "PDF自動読取はできませんでした。理由: 図面PDFが登録されていません。")
@@ -1038,10 +1038,24 @@ def _read_pdf_into_project(request, project, replace_rooms=False, default_wallpa
 
 
 def _elapsed_seconds(started_at):
+    """処理開始時刻からの経過秒数を返す。
+
+    Args:
+        started_at: time.monotonicで取得した処理開始時刻。
+
+    Returns:
+        0以上に丸めた経過秒数。
+    """
     return max(0, int(round(time.monotonic() - started_at)))
 
 
 def _save_calculation_seconds(project, started_at):
+    """案件へ直近の計算時間を保存する。
+
+    Args:
+        project: 処理対象の案件。
+        started_at: time.monotonicで取得した処理開始時刻。
+    """
     project.last_calculation_seconds = _elapsed_seconds(started_at)
     try:
         project.save(update_fields=["last_calculation_seconds"])
@@ -1050,6 +1064,13 @@ def _save_calculation_seconds(project, started_at):
 
 
 def _mark_analysis_failed(project, started_at, error_message):
+    """PDF解析失敗時のステータスとエラー内容を案件へ保存する。
+
+    Args:
+        project: 処理対象の案件。
+        started_at: time.monotonicで取得した処理開始時刻。
+        error_message: 保存するエラーメッセージ。
+    """
     project.analysis_status = ANALYSIS_STATUS_FAILED
     project.analysis_finished_at = timezone.now()
     project.analysis_error_message = _truncate_error_message(error_message)
@@ -1066,10 +1087,26 @@ def _mark_analysis_failed(project, started_at, error_message):
 
 
 def _truncate_error_message(value):
+    """解析エラーメッセージをDB保存上限内に収める。
+
+    Args:
+        value: 変換または正規化する値。
+
+    Returns:
+        先頭2000文字までのエラーメッセージ。
+    """
     return str(value or "").strip()[:2000]
 
 
 def _project_explicit_table_pages(project):
+    """案件に明示指定された表ページ一覧を返す。
+
+    Args:
+        project: 処理対象の案件。
+
+    Returns:
+        表種別とページ番号の一覧。指定がない場合はNone。
+    """
     pages = []
     pages.extend(_single_table_page("床面積表", project.page_floor_area_table))
     pages.extend(_single_table_page("居室区画面積表", project.page_living_area_table))
@@ -1081,11 +1118,30 @@ def _project_explicit_table_pages(project):
 
 
 def _single_table_page(label, value):
+    """単一指定の表ページをページ一覧形式へ変換する。
+
+    Args:
+        label: 表種別ラベル。
+        value: ページ指定文字列。
+
+    Returns:
+        表種別とページ番号の一覧。
+    """
     page = _optional_page_number(value)
     return [(label, page)] if page else []
 
 
 def _range_table_pages(label, start_value, end_value):
+    """範囲または複数指定の表ページをページ一覧形式へ変換する。
+
+    Args:
+        label: 表種別ラベル。
+        start_value: 開始ページ、単一ページ、または複数ページ指定。
+        end_value: 終了ページ指定。
+
+    Returns:
+        表種別とページ番号の一覧。
+    """
     start_pages = _page_number_list(start_value)
     if not start_pages:
         return []
@@ -1096,6 +1152,14 @@ def _range_table_pages(label, start_value, end_value):
 
 
 def _page_number_list(value):
+    """ページ指定文字列から有効なページ番号一覧を抽出する。
+
+    Args:
+        value: ページ指定文字列。
+
+    Returns:
+        1以上のページ番号一覧。
+    """
     normalized = str(value or "").strip()
     if normalized in {"", "-", "ー", "－", "なし", "無し", "0"}:
         return []
@@ -1115,11 +1179,27 @@ def _page_number_list(value):
 
 
 def _optional_page_number(value):
+    """ページ指定文字列から先頭のページ番号を返す。
+
+    Args:
+        value: ページ指定文字列。
+
+    Returns:
+        先頭のページ番号。指定がない場合はNone。
+    """
     numbers = _page_number_list(value)
     return numbers[0] if numbers else None
 
 
 def _deduplicate_table_pages(table_pages):
+    """表種別とページ番号の重複を除いた一覧を返す。
+
+    Args:
+        table_pages: 表種別とページ番号の一覧。
+
+    Returns:
+        入力順を保った重複除外後の一覧。
+    """
     deduplicated = []
     seen = set()
     for label, page in table_pages:
@@ -1132,13 +1212,13 @@ def _deduplicate_table_pages(table_pages):
 
 
 def _project_table_pages_from_memo(memo):
-    """_project_table_pages_from_memoを処理する。
+    """解析メモに記録された表ページ一覧を復元する。
 
     Args:
         memo: 解析結果の補足メモ。
 
     Returns:
-        処理結果。
+        表種別とページ番号の一覧。見つからない場合はNone。
     """
     if not memo:
         return None
@@ -1162,7 +1242,7 @@ def _is_estimated_opening(room):
         room: 処理対象の部屋または解析済み部屋。
 
     Returns:
-        処理結果。
+        開口部面積が推定値を含む場合はTrue。
     """
     return room.opening_area_m2 > 0 and any(
         marker in room.note for marker in ("推定", "展開図", "平面図", "スケール")
@@ -1170,14 +1250,14 @@ def _is_estimated_opening(room):
 
 
 def _join_memo(existing, added):
-    """_join_memoを処理する。
+    """既存メモと追加メモを改行区切りで連結する。
 
     Args:
         existing: 既存メモ。
         added: 追加するメモ。
 
     Returns:
-        処理結果。
+        連結後のメモ。
     """
     if existing and added:
         return f"{existing}\n{added}"
@@ -1185,13 +1265,13 @@ def _join_memo(existing, added):
 
 
 def _project_page_map(project):
-    """_project_page_mapを処理する。
+    """案件の図面ページ設定をPDF解析用の辞書へ変換する。
 
     Args:
         project: 処理対象の案件。
 
     Returns:
-        処理結果。
+        PDF解析へ渡すページ設定。
     """
     return {
         "page_1f_plan": project.page_1f_plan,
@@ -1206,30 +1286,30 @@ def _project_page_map(project):
 
 
 def _page_value(value, default):
-    """_page_valueを処理する。
+    """フォーム入力されたページ値を保存用文字列へ正規化する。
 
     Args:
         value: 変換または正規化する値。
         default: 値が空または不正な場合の既定値。
 
     Returns:
-        処理結果。
+        空の場合は既定値または未指定記号を返すページ値。
     """
     normalized = (value or default).strip()
     return normalized or "ー"
 
 
 def _page_choices():
-    """_page_choicesを処理する。
+    """画面で選択できるページ番号候補を返す。
 
     Returns:
-        処理結果。
+        未指定記号と0から99までのページ番号候補。
     """
     return ["ー", *[str(number) for number in range(100)]]
 
 
 def _decimal(value, default):
-    """_decimalを処理する。
+    """入力値をDecimalへ変換し、失敗時は既定値を返す。
 
     Args:
         value: 変換または正規化する値。
@@ -1245,20 +1325,20 @@ def _decimal(value, default):
 
 
 def _at(values, index):
-    """_atを処理する。
+    """一覧から指定位置の値を安全に取得する。
 
     Args:
         values: 取得対象の値一覧。
         index: 取得する位置。
 
     Returns:
-        処理結果。
+        指定位置の値。範囲外の場合は空文字。
     """
     return values[index] if index < len(values) else ""
 
 
 def _round(value):
-    """_roundを処理する。
+    """Decimal値を小数第2位へ丸める。
 
     Args:
         value: 変換または正規化する値。
@@ -1270,7 +1350,7 @@ def _round(value):
 
 
 def _selectable_wallpapers():
-    """_selectable_wallpapersを処理する。
+    """画面で選択できる有効な壁紙マスタを返す。
 
     Returns:
         選択可能な壁紙QuerySet。
@@ -1280,14 +1360,14 @@ def _selectable_wallpapers():
 
 
 def _posted_surface_wallpapers(post_data, default_wallpaper):
-    """_posted_surface_wallpapersを処理する。
+    """POSTされた面別壁紙No.から面別の壁紙マスタを返す。
 
     Args:
         post_data: POSTされたフォームデータ。
         default_wallpaper: 初期適用する壁紙マスタ。
 
     Returns:
-        処理結果。
+        面フィールド名をキーにした壁紙マスタ辞書。
     """
     wallpaper_map = {wallpaper.number: wallpaper for wallpaper in _selectable_wallpapers()}
     selected = {}
@@ -1297,26 +1377,26 @@ def _posted_surface_wallpapers(post_data, default_wallpaper):
 
 
 def _estimate_method(value):
-    """_estimate_methodを処理する。
+    """見積方式の入力値を有効な選択肢へ正規化する。
 
     Args:
         value: 変換または正規化する値。
 
     Returns:
-        処理結果。
+        有効な見積方式。無効な場合は壁紙別合算方式。
     """
     valid = {choice[0] for choice in ESTIMATE_METHOD_CHOICES}
     return value if value in valid else WALLPAPER_TOTAL_METHOD
 
 
 def _suggested_revision_name(name):
-    """_suggested_revision_nameを処理する。
+    """既存案件名から重複しない修正版の案件名を提案する。
 
     Args:
         name: 名前。
 
     Returns:
-        処理結果。
+        重複しない修正版の案件名。
     """
     base_name = f"{name}修正"
     if not Project.objects.filter(name=base_name).exists():
@@ -1335,7 +1415,7 @@ def _clone_project(project, name):
         name: 名前。
 
     Returns:
-        処理結果。
+        複製した案件。
     """
     clone = Project.objects.create(
         name=name,
@@ -1385,7 +1465,7 @@ def _clone_rooms(source_project, target_project):
         target_project: 複製先の案件。
 
     Returns:
-        処理結果。
+        複製元の部屋IDをキーにした複製後の部屋辞書。
     """
     room_map = {}
     field_names = [
@@ -1398,5 +1478,3 @@ def _clone_rooms(source_project, target_project):
         target_room = Room.objects.create(project=target_project, **values)
         room_map[source_room.pk] = target_room
     return room_map
-
-# Create your views here.

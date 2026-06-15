@@ -928,15 +928,11 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(counts["廊下"], 1)
 
     def test_room_candidate_text_includes_ceiling_plan_pages(self):
-        """room candidate text includes ceiling plan pagesを検証する。
-
-        Returns:
-            処理結果。
-        """
+        """room candidate text includes ceiling plan pagesを検証する。"""
         class FakePage:
             """FakePageのテスト用データ構造。"""
             def __init__(self, text):
-                """__init__を処理する。
+                """抽出対象テキストを保持する。
 
                 Args:
                     text: 解析対象の文字列。
@@ -944,10 +940,10 @@ class WallpaperEstimateTests(TestCase):
                 self.text = text
 
             def extract_text(self):
-                """extract_textを処理する。
+                """テスト用ページのテキストを返す。
 
                 Returns:
-                    処理結果。
+                    ページから抽出される文字列。
                 """
                 return self.text
 
@@ -960,7 +956,7 @@ class WallpaperEstimateTests(TestCase):
             ]
 
             def __init__(self, _path):
-                """__init__を処理する。
+                """PdfReader互換の初期化呼び出しを受け取る。
 
                 Args:
                     _path: テスト用Readerに渡される未使用のパス。
@@ -978,15 +974,11 @@ class WallpaperEstimateTests(TestCase):
         self.assertNotIn("展開図", text)
 
     def test_room_candidate_text_deduplicates_same_page_numbers(self):
-        """room candidate text deduplicates same page numbersを検証する。
-
-        Returns:
-            処理結果。
-        """
+        """room candidate text deduplicates same page numbersを検証する。"""
         class FakePage:
             """FakePageのテスト用データ構造。"""
             def __init__(self, text):
-                """__init__を処理する。
+                """抽出対象テキストと読取回数を保持する。
 
                 Args:
                     text: 解析対象の文字列。
@@ -995,10 +987,10 @@ class WallpaperEstimateTests(TestCase):
                 self.read_count = 0
 
             def extract_text(self):
-                """extract_textを処理する。
+                """読取回数を記録してテスト用ページのテキストを返す。
 
                 Returns:
-                    処理結果。
+                    ページから抽出される文字列。
                 """
                 self.read_count += 1
                 return self.text
@@ -1010,7 +1002,7 @@ class WallpaperEstimateTests(TestCase):
             pages = [shared_page]
 
             def __init__(self, _path):
-                """__init__を処理する。
+                """PdfReader互換の初期化呼び出しを受け取る。
 
                 Args:
                     _path: テスト用Readerに渡される未使用のパス。
@@ -1119,15 +1111,11 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(pages, [9, 10, 6, 11, 12, 14, 22])
 
     def test_detect_table_pages_includes_finish_and_fixture_tables(self):
-        """detect table pages includes finish and fixture tablesを検証する。
-
-        Returns:
-            処理結果。
-        """
+        """detect table pages includes finish and fixture tablesを検証する。"""
         class FakePage:
             """FakePageのテスト用データ構造。"""
             def __init__(self, text):
-                """__init__を処理する。
+                """抽出対象テキストを保持する。
 
                 Args:
                     text: 解析対象の文字列。
@@ -1135,10 +1123,10 @@ class WallpaperEstimateTests(TestCase):
                 self.text = text
 
             def extract_text(self):
-                """extract_textを処理する。
+                """テスト用ページのテキストを返す。
 
                 Returns:
-                    処理結果。
+                    ページから抽出される文字列。
                 """
                 return self.text
 
@@ -1152,7 +1140,7 @@ class WallpaperEstimateTests(TestCase):
             ]
 
             def __init__(self, _path):
-                """__init__を処理する。
+                """PdfReader互換の初期化呼び出しを受け取る。
 
                 Args:
                     _path: テスト用Readerに渡される未使用のパス。
@@ -1165,15 +1153,11 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(pages, [("室内仕上表", 1), ("内部仕上表", 2), ("建具表", 3)])
 
     def test_detect_table_pages_includes_garbled_finish_and_fixture_tables_without_ai(self):
-        """detect table pages includes garbled finish and fixture tables without aiを検証する。
-
-        Returns:
-            処理結果。
-        """
+        """detect table pages includes garbled finish and fixture tables without aiを検証する。"""
         class FakePage:
             """FakePageのテスト用データ構造。"""
             def __init__(self, text):
-                """__init__を処理する。
+                """抽出対象テキストを保持する。
 
                 Args:
                     text: 解析対象の文字列。
@@ -1181,10 +1165,10 @@ class WallpaperEstimateTests(TestCase):
                 self.text = text
 
             def extract_text(self):
-                """extract_textを処理する。
+                """テスト用ページのテキストを返す。
 
                 Returns:
-                    処理結果。
+                    ページから抽出される文字列。
                 """
                 return self.text
 
@@ -1196,7 +1180,7 @@ class WallpaperEstimateTests(TestCase):
             ]
 
             def __init__(self, _path):
-                """__init__を処理する。
+                """PdfReader互換の初期化呼び出しを受け取る。
 
                 Args:
                     _path: テスト用Readerに渡される未使用のパス。
@@ -1210,18 +1194,14 @@ class WallpaperEstimateTests(TestCase):
 
     @override_settings(OPENAI_API_KEY="test-key", OPENAI_VISUAL_TABLE_PAGE_DETECTION="true")
     def test_detect_table_pages_uses_visual_ai_when_text_is_garbled(self):
-        """detect table pages uses visual ai when text is garbledを検証する。
-
-        Returns:
-            処理結果。
-        """
+        """detect table pages uses visual ai when text is garbledを検証する。"""
         class FakePage:
             """FakePageのテスト用データ構造。"""
             def extract_text(self):
-                """extract_textを処理する。
+                """文字化けしたテキスト抽出結果を返す。
 
                 Returns:
-                    処理結果。
+                    文字化けしたページテキスト。
                 """
                 return "4 & , * ɹɹ   "
 
@@ -1230,7 +1210,7 @@ class WallpaperEstimateTests(TestCase):
             pages = [FakePage(), FakePage(), FakePage()]
 
             def __init__(self, _path):
-                """__init__を処理する。
+                """PdfReader互換の初期化呼び出しを受け取る。
 
                 Args:
                     _path: テスト用Readerに渡される未使用のパス。
@@ -1240,14 +1220,14 @@ class WallpaperEstimateTests(TestCase):
         class FakeFiles:
             """FakeFilesのテスト用データ構造。"""
             def create(self, file, purpose):
-                """createを作成する。
+                """OpenAI Files APIのアップロード応答を返す。
 
                 Args:
                     file: アップロード対象として渡されるファイル。
                     purpose: OpenAI Files APIへ渡す用途。
 
                 Returns:
-                    処理結果。
+                    ファイルIDを持つテスト用応答。
                 """
                 return SimpleNamespace(id="file-1")
 
@@ -1258,20 +1238,20 @@ class WallpaperEstimateTests(TestCase):
                     file_id: 削除対象のOpenAIファイルID。
 
                 Returns:
-                    処理結果。
+                    常にNone。
                 """
                 return None
 
         class FakeResponses:
             """FakeResponsesのテスト用データ構造。"""
             def create(self, **kwargs):
-                """createを作成する。
+                """OpenAI Responses APIの表ページ検出応答を返す。
 
                 Args:
                     kwargs: 追加のキーワード引数。
 
                 Returns:
-                    処理結果。
+                    output_textを持つテスト用応答。
                 """
                 return SimpleNamespace(output_text=json.dumps({
                     "table_pages": [
@@ -1283,7 +1263,7 @@ class WallpaperEstimateTests(TestCase):
         class FakeOpenAI:
             """FakeOpenAIのテスト用データ構造。"""
             def __init__(self, api_key):
-                """__init__を処理する。
+                """OpenAIクライアント互換のテスト用APIを設定する。
 
                 Args:
                     api_key: テスト用OpenAIクライアントへ渡されるAPIキー。
@@ -1579,5 +1559,3 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(project.analysis_status, ANALYSIS_STATUS_SUCCEEDED)
         self.assertIsNotNone(project.last_calculation_seconds)
         self.assertEqual(list(project.rooms.values_list("name", flat=True)), ["新しいLDK"])
-
-# Create your tests here.

@@ -79,7 +79,7 @@ class WallpaperAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            読み取り専用にするフィールド名のタプル。
         """
         if obj and obj.number == "000":
             return (
@@ -112,7 +112,7 @@ class WallpaperAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            削除を許可する場合はTrue。
         """
         return False
 
@@ -124,7 +124,7 @@ class WallpaperAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            ロール幅。
         """
         return obj.roll_width_m
 
@@ -136,7 +136,7 @@ class WallpaperAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            ロール長さ。
         """
         return obj.roll_length_m
 
@@ -148,7 +148,7 @@ class WallpaperAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            ロス率。
         """
         return obj.loss_rate_percent
 
@@ -160,7 +160,7 @@ class WallpaperAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            1ロール単価。
         """
         return obj.unit_price_per_roll
 
@@ -191,7 +191,7 @@ class ProjectAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            採用見積方式でのロール本数。
         """
         return obj.total_rolls
 
@@ -203,7 +203,7 @@ class ProjectAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            採用見積方式での概算金額。
         """
         return obj.total_cost
 
@@ -228,7 +228,7 @@ class EstimateDefaultSettingsAdmin(admin.ModelAdmin):
             kwargs: 追加のキーワード引数。
 
         Returns:
-            処理結果。
+            絞り込み後のフォームフィールド。
         """
         if db_field.name == "default_wallpaper":
             kwargs["queryset"] = Wallpaper.objects.filter(is_active=True).order_by("display_order", "number")
@@ -241,7 +241,7 @@ class EstimateDefaultSettingsAdmin(admin.ModelAdmin):
             request: HTTPリクエスト。
 
         Returns:
-            処理結果。
+            初期値設定が未作成の場合はTrue。
         """
         return not EstimateDefaultSettings.objects.exists()
 
@@ -253,7 +253,7 @@ class EstimateDefaultSettingsAdmin(admin.ModelAdmin):
             obj: 管理画面で処理するモデルインスタンス。
 
         Returns:
-            処理結果。
+            削除を許可する場合はTrue。
         """
         return False
 
@@ -267,7 +267,7 @@ class PermissionChoiceField(forms.ModelMultipleChoiceField):
             permission: 表示ラベルを作成する権限。
 
         Returns:
-            処理結果。
+            日本語化した権限ラベル。
         """
         app_label = _app_verbose_name(permission.content_type.app_label)
         model_label = _model_verbose_name(permission)
@@ -333,7 +333,7 @@ def _app_verbose_name(app_label):
         app_label: Djangoアプリのラベル。
 
     Returns:
-        処理結果。
+        Djangoアプリの表示名。
     """
     try:
         return apps.get_app_config(app_label).verbose_name
@@ -348,7 +348,7 @@ def _model_verbose_name(permission):
         permission: 表示ラベルを作成する権限。
 
     Returns:
-        処理結果。
+        権限に紐づくモデルの表示名。
     """
     model_label = MODEL_LABELS.get(
         (permission.content_type.app_label, permission.content_type.model)
@@ -369,7 +369,7 @@ def _action_label(codename):
         codename: 権限コード名。
 
     Returns:
-        処理結果。
+        操作種別の日本語ラベル。
     """
     action = codename.split("_", 1)[0]
     return PERMISSION_ACTIONS.get(action, codename)
@@ -383,7 +383,7 @@ def _pad_japanese(value, width):
         width: 文字幅をそろえる基準幅。
 
     Returns:
-        処理結果。
+        指定幅に合わせて全角スペースを追加した文字列。
     """
     value = str(value)
     padding = max(width - len(value), 0)

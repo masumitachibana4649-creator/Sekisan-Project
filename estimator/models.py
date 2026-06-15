@@ -84,7 +84,7 @@ class Wallpaper(models.Model):
         """1ロールあたりの面積を返す。
 
         Returns:
-            処理結果。
+            ロール幅とロール長さから算出した面積。
         """
         return self.roll_width_m * self.roll_length_m
 
@@ -93,7 +93,7 @@ class Wallpaper(models.Model):
         """壁紙無しを表すマスタかどうかを返す。
 
         Returns:
-            処理結果。
+            壁紙No.が000の場合はTrue。
         """
         return self.number == "000"
 
@@ -241,7 +241,7 @@ class Project(models.Model):
         """案件に図面PDFが紐づいているかを返す。
 
         Returns:
-            処理結果。
+            StorageパスまたはローカルPDFがある場合はTrue。
         """
         return bool(self.drawing_pdf_storage_path or self.drawing_pdf)
 
@@ -250,7 +250,7 @@ class Project(models.Model):
         """画面表示用の図面PDFファイル名を返す。
 
         Returns:
-            処理結果。
+            元ファイル名、保存ファイル名、または既定のPDFファイル名。
         """
         if self.drawing_pdf_original_name:
             return self.drawing_pdf_original_name
@@ -278,7 +278,7 @@ class Project(models.Model):
         """1ロールあたりの面積を返す。
 
         Returns:
-            処理結果。
+            ロール幅とロール長さから算出した面積。
         """
         return self.wallpaper_roll_width_m * self.wallpaper_roll_length_m
 
@@ -287,7 +287,7 @@ class Project(models.Model):
         """ロス率を含めない合計施工面積を返す。
 
         Returns:
-            処理結果。
+            案件全体のロス率適用前の施工面積。
         """
         return self.wallpaper_summary["total_base_area"]
 
@@ -296,7 +296,7 @@ class Project(models.Model):
         """ロス率を含めた合計必要面積を返す。
 
         Returns:
-            処理結果。
+            案件全体のロス率適用後の必要面積。
         """
         return self.wallpaper_summary["total_required_area"]
 
@@ -305,7 +305,7 @@ class Project(models.Model):
         """採用見積方式での合計ロール本数を返す。
 
         Returns:
-            処理結果。
+            採用見積方式で計算したロール本数。
         """
         return self.selected_estimate_totals["rolls"]
 
@@ -314,7 +314,7 @@ class Project(models.Model):
         """採用見積方式での概算金額を返す。
 
         Returns:
-            処理結果。
+            採用見積方式で計算した概算金額。
         """
         return self.selected_estimate_totals["cost"]
 
@@ -323,7 +323,7 @@ class Project(models.Model):
         """採用見積方式に対応する合計値を返す。
 
         Returns:
-            処理結果。
+            採用見積方式に対応するロール本数と金額の辞書。
         """
         summary = self.wallpaper_summary
         if self.adopted_estimate_method == ROOM_TOTAL_METHOD:
@@ -335,7 +335,7 @@ class Project(models.Model):
         """案件内の部屋情報から壁紙別・部屋別の集計を返す。
 
         Returns:
-            処理結果。
+            壁紙別行、部屋別行、合計面積、ロール本数、金額を含む集計辞書。
         """
         rooms = list(self.rooms.all())
         by_wallpaper = {}
@@ -524,7 +524,7 @@ class Room(models.Model):
         """階数を含めた画面表示用の部屋名を返す。
 
         Returns:
-            処理結果。
+            階数と部屋名を組み合わせた表示名。
         """
         floor = self.display_floor_label
         room_name = self.display_room_name
@@ -537,7 +537,7 @@ class Room(models.Model):
         """部屋名や根拠情報から表示用の階数ラベルを返す。
 
         Returns:
-            処理結果。
+            表示用の階数ラベル。複数階にまたがる場合は空文字。
         """
         name = str(self.name or "").strip()
         if self._is_multi_floor_room(name):
@@ -550,7 +550,7 @@ class Room(models.Model):
         """階数表記を除いた表示用の部屋名を返す。
 
         Returns:
-            処理結果。
+            階数表記を除いた部屋名。
         """
         name = str(self.name or "").strip()
         if self._is_multi_floor_room(name):
@@ -564,7 +564,7 @@ class Room(models.Model):
         """部屋名や備考から階数ラベルを推定する。
 
         Returns:
-            処理結果。
+            推定した階数ラベル。見つからない場合は空文字。
         """
         source = self._ascii_digits(f"{self.name} {self.note}")
         match = re.search(r"([1-9])\s*(?:F|階)", source, re.IGNORECASE)
@@ -579,7 +579,7 @@ class Room(models.Model):
             source: 階数やページ番号の判定に使う文字列。
 
         Returns:
-            処理結果。
+            根拠ページから推定した階数ラベル。見つからない場合は空文字。
         """
         page_matches = {
             "1F": self.project.page_1f_plan,
@@ -599,7 +599,7 @@ class Room(models.Model):
             name: 名前。
 
         Returns:
-            処理結果。
+            吹抜など複数階にまたがる部屋名の場合はTrue。
         """
         return any(keyword in name for keyword in ("吹抜", "吹き抜け"))
 
@@ -610,7 +610,7 @@ class Room(models.Model):
             value: 変換または正規化する値。
 
         Returns:
-            処理結果。
+            階数表記を除去した部屋名。
         """
         normalized = self._ascii_digits(value)
         normalized = re.sub(r"\b[1-9]\s*F\b", "", normalized, flags=re.IGNORECASE)
@@ -625,7 +625,7 @@ class Room(models.Model):
             value: 変換または正規化する値。
 
         Returns:
-            処理結果。
+            全角数字を半角数字に変換した文字列。
         """
         return str(value or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
 
@@ -637,7 +637,7 @@ class Room(models.Model):
             value: 変換または正規化する値。
 
         Returns:
-            処理結果。
+            ページ番号。未指定や不正な値の場合はNone。
         """
         normalized = cls._ascii_digits(value).strip()
         if normalized in {"", "-", "ー", "－", "なし", "無し", "0"}:
@@ -652,7 +652,7 @@ class Room(models.Model):
         """部屋の壁面積を返す。
 
         Returns:
-            処理結果。
+            開口部控除後の壁面積。
         """
         if self.has_surface_measurements:
             return sum((self.net_surface_area(field) for field, _label, surface_type in SURFACE_FIELDS if surface_type == "wall"), Decimal("0"))
@@ -664,7 +664,7 @@ class Room(models.Model):
         """面別の面積または開口部面積が入力されているかを返す。
 
         Returns:
-            処理結果。
+            面別入力がある場合はTrue。
         """
         return any(
             getattr(self, f"{field}_surface_area_m2") > 0
@@ -682,7 +682,7 @@ class Room(models.Model):
             field: 対象の面またはフィールド名。
 
         Returns:
-            処理結果。
+            指定面の開口部控除後面積。
         """
         surface_area = getattr(self, f"{field}_surface_area_m2")
         if field == "ceiling":
@@ -695,7 +695,7 @@ class Room(models.Model):
         """壁紙無しを除いた施工面積を返す。
 
         Returns:
-            処理結果。
+            集計対象の壁紙施工面積。
         """
         if self.excluded_from_summary:
             return Decimal("0")
@@ -706,7 +706,7 @@ class Room(models.Model):
         """ロス率を含めた合計必要面積を返す。
 
         Returns:
-            処理結果。
+            部屋全体のロス率適用後の必要面積。
         """
         if self.excluded_from_summary:
             return Decimal("0")
@@ -717,7 +717,7 @@ class Room(models.Model):
         """部屋単位で必要なロール本数を返す。
 
         Returns:
-            処理結果。
+            部屋内の壁紙別に切り上げた合計ロール本数。
         """
         if self.excluded_from_summary:
             return 0
@@ -733,7 +733,7 @@ class Room(models.Model):
         """部屋の各面ごとの壁紙積算情報を返す。
 
         Returns:
-            処理結果。
+            面ごとの壁紙、面積、ロール幅、単価などを含む明細一覧。
         """
         derived_wall_face_area = max((self.perimeter_m * self.height_m) - self.opening_area_m2, Decimal("0")) / Decimal("4")
         derived_wall_opening_area = self.opening_area_m2 / Decimal("4")
