@@ -571,14 +571,57 @@ textarea { resize: vertical; }
   overflow-x: auto;
 }
 
+.result-scroll-area {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-rows: 18px fit-content(620px);
+  gap: 0;
+}
+
+.result-scroll-corner {
+  grid-column: 1;
+  grid-row: 1;
+  background: var(--panel);
+}
+
+.result-scroll-x {
+  grid-column: 2;
+  grid-row: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.result-scroll-y {
+  grid-column: 1;
+  grid-row: 2;
+  direction: rtl;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.result-scroll-x-spacer {
+  block-size: 1px;
+}
+
+.result-scroll-y-spacer {
+  inline-size: 1px;
+}
+
 .result-table {
   --room-grid-x-padding: 12px;
   --room-no-width: 46px;
   --room-floor-width: 58px;
   --room-name-width: 170px;
   --room-pinned-width: calc(var(--room-no-width) + var(--room-floor-width) + var(--room-name-width));
+  grid-column: 2;
+  grid-row: 2;
   max-height: 620px;
   overflow: auto;
+  scrollbar-width: none;
+}
+
+.result-table::-webkit-scrollbar {
+  display: none;
 }
 
 .result-body {

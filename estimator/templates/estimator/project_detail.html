@@ -115,13 +115,21 @@
       {% endif %}
     </div>
   {% endif %}
-  <div class="result-table">
-    <div class="result-head">
-      <span>No</span><span>階</span><span>部屋名</span><span>1面</span><span>2面</span><span>3面</span><span>4面</span><span>天井</span><span>面積/本数</span><span>備考</span>
+  <div class="result-scroll-area" data-result-scroll-area>
+    <div class="result-scroll-corner" aria-hidden="true"></div>
+    <div class="result-scroll-x" data-result-scroll-x aria-label="部屋別明細 横スクロール">
+      <div class="result-scroll-x-spacer" data-result-scroll-x-spacer></div>
     </div>
-    <div class="result-body" data-room-detail-body>
-    {% for room in rooms %}
-      <div class="room-detail-group {% if room.excluded_from_summary %}is-summary-excluded{% endif %}">
+    <div class="result-scroll-y" data-result-scroll-y aria-label="部屋別明細 縦スクロール">
+      <div class="result-scroll-y-spacer" data-result-scroll-y-spacer></div>
+    </div>
+    <div class="result-table" data-result-table>
+      <div class="result-head">
+        <span>No</span><span>階</span><span>部屋名</span><span>1面</span><span>2面</span><span>3面</span><span>4面</span><span>天井</span><span>面積/本数</span><span>備考</span>
+      </div>
+      <div class="result-body" data-room-detail-body>
+      {% for room in rooms %}
+        <div class="room-detail-group {% if room.excluded_from_summary %}is-summary-excluded{% endif %}">
         <strong class="room-no-cell">{{ forloop.counter }}</strong>
         <span class="room-floor-cell">{{ room.display_floor_label }}</span>
         <strong class="room-name-cell {% if room.source_type == "ai_missing" %}source-missing-room{% elif room.source_type == "manual" %}source-manual-room{% endif %}">{{ room.display_room_name }}</strong>
@@ -200,15 +208,16 @@
         <span class="room-measure-cell {% if room.north_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.north_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_north_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.north_opening_area_m2 }}">{% else %}{{ room.north_opening_area_m2 }}{% endif %}</span>
         <span class="room-measure-cell"></span>
         <span class="room-total-spacer room-opening-spacer"></span>
+        </div>
+      {% empty %}
+        <div class="empty-result">
+          <strong>積算が作成できませんでした。</strong>
+          {% if project.has_drawing_pdf %}
+            <span>再計算を押すと、PDF読取から計算をやり直します。</span>
+          {% endif %}
+        </div>
+      {% endfor %}
       </div>
-    {% empty %}
-      <div class="empty-result">
-        <strong>積算が作成できませんでした。</strong>
-        {% if project.has_drawing_pdf %}
-          <span>再計算を押すと、PDF読取から計算をやり直します。</span>
-        {% endif %}
-      </div>
-    {% endfor %}
     </div>
   </div>
   {% if project.memo or project.last_calculation_seconds is not None %}

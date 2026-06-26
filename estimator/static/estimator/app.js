@@ -14,6 +14,11 @@ const newRoomName = document.querySelector("[data-new-room-name]");
 const newRoomError = document.querySelector("[data-new-room-error]");
 const roomDetailBody = document.querySelector("[data-room-detail-body]");
 const newRoomFields = document.querySelector("[data-new-room-fields]");
+const resultTable = document.querySelector("[data-result-table]");
+const resultScrollX = document.querySelector("[data-result-scroll-x]");
+const resultScrollY = document.querySelector("[data-result-scroll-y]");
+const resultScrollXSpacer = document.querySelector("[data-result-scroll-x-spacer]");
+const resultScrollYSpacer = document.querySelector("[data-result-scroll-y-spacer]");
 
 if (addRoomButton && roomTable && template) {
   addRoomButton.addEventListener("click", () => {
@@ -53,6 +58,10 @@ if (pdfInput && pdfPreview) {
     pdfPreview.href = previewUrl;
     pdfPreview.classList.remove("is-hidden");
   });
+}
+
+if (resultTable && resultScrollX && resultScrollY && resultScrollXSpacer && resultScrollYSpacer) {
+  initializeResultScrollbars();
 }
 
 if (openAddRoomButton && addRoomDialog && confirmAddRoomButton && newRoomFloor && newRoomName && roomDetailBody && newRoomFields) {
@@ -125,8 +134,54 @@ function appendManualRoomPreview(floor, roomName) {
     <span class="room-total-spacer room-opening-spacer"></span>
   `;
   roomDetailBody.append(row);
+  updateResultScrollbars();
   const firstInput = row.querySelector('input[name="new_room_name"]');
   if (firstInput) firstInput.focus();
+}
+
+function initializeResultScrollbars() {
+  let isSyncing = false;
+
+  updateResultScrollbars();
+
+  resultTable.addEventListener("scroll", () => {
+    if (isSyncing) return;
+    isSyncing = true;
+    resultScrollX.scrollLeft = resultTable.scrollLeft;
+    resultScrollY.scrollTop = resultTable.scrollTop;
+    isSyncing = false;
+  });
+
+  resultScrollX.addEventListener("scroll", () => {
+    if (isSyncing) return;
+    isSyncing = true;
+    resultTable.scrollLeft = resultScrollX.scrollLeft;
+    isSyncing = false;
+  });
+
+  resultScrollY.addEventListener("scroll", () => {
+    if (isSyncing) return;
+    isSyncing = true;
+    resultTable.scrollTop = resultScrollY.scrollTop;
+    isSyncing = false;
+  });
+
+  window.addEventListener("resize", updateResultScrollbars);
+
+  if ("ResizeObserver" in window) {
+    const observer = new ResizeObserver(updateResultScrollbars);
+    observer.observe(resultTable);
+    if (roomDetailBody) observer.observe(roomDetailBody);
+  }
+}
+
+function updateResultScrollbars() {
+  if (!resultTable || !resultScrollX || !resultScrollY || !resultScrollXSpacer || !resultScrollYSpacer) return;
+
+  resultScrollXSpacer.style.width = `${resultTable.scrollWidth}px`;
+  resultScrollYSpacer.style.height = `${resultTable.scrollHeight}px`;
+  resultScrollX.scrollLeft = resultTable.scrollLeft;
+  resultScrollY.scrollTop = resultTable.scrollTop;
 }
 
 function escapeHtml(value) {
