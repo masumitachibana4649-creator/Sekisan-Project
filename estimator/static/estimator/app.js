@@ -228,17 +228,19 @@ function appendOpeningRows(row, button) {
   const nextCount = Number(countInput.value || "0") + 1;
   countInput.value = String(nextCount);
   const prefix = countInput.name.replace(/_opening_count$/, "");
-  const startRow = 2 + 4 + ((nextCount - 1) * 3);
+  const startRow = 2 + 4 + ((nextCount - 1) * 4);
   const fragment = document.createDocumentFragment();
   if (nextCount === 1) {
     fragment.append(measureSpacerRow(5));
+  } else {
+    fragment.append(measureSpacerRow(startRow - 1));
   }
   fragment.append(openingMeasureRow(prefix, nextCount, `開口部${nextCount}(m2)`, startRow, "area"));
   fragment.append(openingMeasureRow(prefix, nextCount, "幅(m)", startRow + 1, "width"));
   fragment.append(openingMeasureRow(prefix, nextCount, "高(m)", startRow + 2, "height"));
   row.insertBefore(fragment, button);
 
-  const detailRows = 4 + (nextCount * 3);
+  const detailRows = 4 + (nextCount * 4);
   const note = row.querySelector(".room-note-cell");
   const exclude = row.querySelector(".room-exclude-cell");
   if (note) note.style.gridRow = `1 / span ${detailRows + 1}`;

@@ -933,6 +933,8 @@ def _prepare_room_detail_rows(rooms):
         if max_opening_count > 0:
             rows.append(_measure_spacer_row())
         for sequence in range(1, max_opening_count + 1):
+            if sequence > 1:
+                rows.append(_measure_spacer_row())
             rows.extend([
                 _opening_measure_row(room, openings_by_surface, sequence, f"開口部{sequence}(m2)", "area", editable=False),
                 _opening_measure_row(room, openings_by_surface, sequence, "幅(m)", "width", editable=True),
@@ -942,10 +944,21 @@ def _prepare_room_detail_rows(rooms):
             row["grid_row"] = index
         room.detail_measure_rows = rows
         room.opening_count = max_opening_count
-        note_rows = max(3, math.ceil(len(str(room.note or "")) / 28) + 1)
+        note_rows = _room_note_grid_span(room.note)
         room.detail_note_span = max(len(rows) + 1, note_rows)
         room.detail_exclude_row = room.detail_note_span + 1
         room.detail_add_opening_row = room.detail_note_span + 2
+
+
+def _room_note_grid_span(note):
+    """備考文字列を表示するために必要なグリッド行数を保守的に見積もる。"""
+    text = str(note or "")
+    if not text:
+        return 4
+    visual_length = sum(2 if ord(character) > 127 else 1 for character in text)
+    explicit_lines = text.count("\n") + text.count("。") + text.count(" / ") + 1
+    wrapped_lines = math.ceil(visual_length / 34)
+    return max(4, explicit_lines, wrapped_lines) + 3
 
 
 def _surface_measure_row(room, label, kind, field_suffix, editable):

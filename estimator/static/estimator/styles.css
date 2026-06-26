@@ -812,6 +812,8 @@ textarea { resize: vertical; }
   min-height: max-content;
   overflow: visible;
   white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .result-head span:last-child {
