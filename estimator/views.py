@@ -1,6 +1,7 @@
 """壁紙積算アプリの画面表示、PDF読取、CSV出力を処理するビューを定義する。"""
 
 import csv
+import math
 import logging
 import re
 import tempfile
@@ -929,6 +930,8 @@ def _prepare_room_detail_rows(rooms):
             _surface_measure_row(room, "幅(m)", "width", "surface_width_m", editable=True),
             _surface_measure_row(room, "高(m)", "height", "surface_height_m", editable=True),
         ]
+        if max_opening_count > 0:
+            rows.append(_measure_spacer_row())
         for sequence in range(1, max_opening_count + 1):
             rows.extend([
                 _opening_measure_row(room, openings_by_surface, sequence, f"開口部{sequence}(m2)", "area", editable=False),
@@ -939,9 +942,10 @@ def _prepare_room_detail_rows(rooms):
             row["grid_row"] = index
         room.detail_measure_rows = rows
         room.opening_count = max_opening_count
-        room.detail_note_span = len(rows) + 1
-        room.detail_exclude_row = len(rows) + 2
-        room.detail_add_opening_row = len(rows) + 3
+        note_rows = max(3, math.ceil(len(str(room.note or "")) / 28) + 1)
+        room.detail_note_span = max(len(rows) + 1, note_rows)
+        room.detail_exclude_row = room.detail_note_span + 1
+        room.detail_add_opening_row = room.detail_note_span + 2
 
 
 def _surface_measure_row(room, label, kind, field_suffix, editable):
@@ -957,6 +961,15 @@ def _surface_measure_row(room, label, kind, field_suffix, editable):
     return {"label": label, "kind": kind, "cells": cells}
 
 
+def _measure_spacer_row():
+    """面積ブロックと開口部ブロックの間に入れる空白行を作成する。"""
+    cells = [
+        {"field": field, "value": "", "name": "", "editable": False, "blank": True}
+        for field, _surface_label, _surface_type in SURFACE_FIELDS
+    ]
+    return {"label": "", "kind": "spacer", "cells": cells, "is_spacer": True}
+
+
 def _opening_measure_row(room, openings_by_surface, sequence, label, kind, editable):
     """開口部の寸法行を作成する。"""
     cells = []
@@ -965,6 +978,7 @@ def _opening_measure_row(room, openings_by_surface, sequence, label, kind, edita
         if surface_type != "wall":
             cells.append({"field": field, "value": "", "name": "", "editable": False, "blank": True})
             continue
+        estimated_opening = bool(opening and opening.area_m2 > 0 and "推定" in room.note)
         if kind == "area":
             value = opening.area_m2 if opening else Decimal("0")
             suffix = "area_m2"
@@ -980,7 +994,7 @@ def _opening_measure_row(room, openings_by_surface, sequence, label, kind, edita
             "name": f"room_{room.pk}_{field}_opening_{sequence}_{suffix}",
             "editable": editable,
             "opening_sequence": sequence,
-            "estimated": kind == "area" and value > 0 and "推定" in room.note,
+            "estimated": estimated_opening,
         })
     return {"label": label, "kind": f"opening-{kind}", "cells": cells, "opening_sequence": sequence}
 

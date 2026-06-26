@@ -228,14 +228,17 @@ function appendOpeningRows(row, button) {
   const nextCount = Number(countInput.value || "0") + 1;
   countInput.value = String(nextCount);
   const prefix = countInput.name.replace(/_opening_count$/, "");
-  const startRow = 2 + 3 + ((nextCount - 1) * 3);
+  const startRow = 2 + 4 + ((nextCount - 1) * 3);
   const fragment = document.createDocumentFragment();
+  if (nextCount === 1) {
+    fragment.append(measureSpacerRow(5));
+  }
   fragment.append(openingMeasureRow(prefix, nextCount, `開口部${nextCount}(m2)`, startRow, "area"));
   fragment.append(openingMeasureRow(prefix, nextCount, "幅(m)", startRow + 1, "width"));
   fragment.append(openingMeasureRow(prefix, nextCount, "高(m)", startRow + 2, "height"));
   row.insertBefore(fragment, button);
 
-  const detailRows = 3 + (nextCount * 3);
+  const detailRows = 4 + (nextCount * 3);
   const note = row.querySelector(".room-note-cell");
   const exclude = row.querySelector(".room-exclude-cell");
   if (note) note.style.gridRow = `1 / span ${detailRows + 1}`;
@@ -254,6 +257,15 @@ function surfaceMeasureRow(label, gridRow, kind) {
     return `<span class="room-measure-cell" style="grid-row: ${gridRow};">0.000</span>`;
   }).join("");
   return `<strong class="room-sub-label" style="grid-row: ${gridRow};">${label}</strong>${cells}<span class="room-total-spacer" style="grid-row: ${gridRow};"></span>`;
+}
+
+function measureSpacerRow(gridRow) {
+  const wrapper = document.createElement("template");
+  const cells = ["east", "west", "south", "north", "ceiling"].map(() => (
+    `<span class="room-measure-cell is-blank room-measure-spacer" style="grid-row: ${gridRow};"></span>`
+  )).join("");
+  wrapper.innerHTML = `<strong class="room-sub-label room-measure-spacer-label" style="grid-row: ${gridRow};"></strong>${cells}<span class="room-total-spacer room-measure-spacer" style="grid-row: ${gridRow};"></span>`;
+  return wrapper.content;
 }
 
 function openingMeasureRow(prefix, sequence, label, gridRow, kind) {

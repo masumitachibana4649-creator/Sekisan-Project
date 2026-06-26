@@ -778,6 +778,12 @@ textarea { resize: vertical; }
   text-align: right;
 }
 
+.room-measure-spacer-label,
+.room-measure-spacer {
+  min-height: 18px;
+  padding-block: 0;
+}
+
 .room-area-measure,
 .room-area-spacer {
   grid-row: 2;
@@ -802,6 +808,10 @@ textarea { resize: vertical; }
   grid-row: 1 / span 3;
   padding-left: 2em;
   line-height: 1.55;
+  align-self: start;
+  min-height: max-content;
+  overflow: visible;
+  white-space: normal;
 }
 
 .result-head span:last-child {

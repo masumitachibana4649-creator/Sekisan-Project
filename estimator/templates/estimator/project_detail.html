@@ -196,11 +196,11 @@
         </label>
         <input type="hidden" name="room_{{ room.pk }}_opening_count" value="{{ room.opening_count }}" data-opening-count>
         {% for row in room.detail_measure_rows %}
-          <strong class="room-sub-label" style="grid-row: {{ row.grid_row }};" {% if row.opening_sequence == 1 and row.kind == "opening-area" %}data-legacy-label="開口部(m2)"{% endif %}>{{ row.label }}</strong>
+          <strong class="room-sub-label {% if row.is_spacer %}room-measure-spacer-label{% endif %}" style="grid-row: {{ row.grid_row }};" {% if row.opening_sequence == 1 and row.kind == "opening-area" %}data-legacy-label="開口部(m2)"{% endif %}>{{ row.label }}</strong>
           {% for cell in row.cells %}
-            <span class="room-measure-cell {% if cell.blank %}is-blank{% endif %}{% if cell.estimated %} estimated-value{% endif %}" style="grid-row: {{ row.grid_row }};">
+            <span class="room-measure-cell {% if cell.blank %}is-blank{% endif %}{% if row.is_spacer %} room-measure-spacer{% endif %}{% if cell.estimated %} estimated-value{% endif %}" style="grid-row: {{ row.grid_row }};">
               {% if edit_mode and cell.editable %}
-                <input name="{{ cell.name }}" type="number" step="0.001" min="0" value="{{ cell.value|floatformat:3 }}" data-measure-input>
+                <input class="{% if cell.estimated %}estimated-value{% endif %}" name="{{ cell.name }}" type="number" step="0.001" min="0" value="{{ cell.value|floatformat:3 }}" data-measure-input>
               {% elif cell.blank %}
               {% else %}
                 {{ cell.value|floatformat:3 }}
