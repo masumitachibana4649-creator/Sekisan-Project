@@ -572,6 +572,7 @@ textarea { resize: vertical; }
 }
 
 .result-table {
+  --room-grid-x-padding: 12px;
   --room-no-width: 46px;
   --room-floor-width: 58px;
   --room-name-width: 170px;
@@ -668,7 +669,8 @@ textarea { resize: vertical; }
 .room-no-cell,
 .room-floor-cell,
 .room-name-cell,
-.room-sub-label {
+.room-sub-label,
+.room-exclude-cell {
   position: sticky;
   z-index: 2;
   background: inherit;
@@ -676,21 +678,22 @@ textarea { resize: vertical; }
 
 .result-head span:nth-child(1),
 .room-no-cell {
-  left: 0;
+  left: var(--room-grid-x-padding);
 }
 
 .result-head span:nth-child(2),
 .room-floor-cell {
-  left: var(--room-no-width);
+  left: calc(var(--room-grid-x-padding) + var(--room-no-width));
 }
 
 .result-head span:nth-child(3),
 .room-name-cell {
-  left: calc(var(--room-no-width) + var(--room-floor-width));
+  left: calc(var(--room-grid-x-padding) + var(--room-no-width) + var(--room-floor-width));
 }
 
-.room-sub-label {
-  left: 0;
+.room-sub-label,
+.room-exclude-cell {
+  left: var(--room-grid-x-padding);
 }
 
 .result-head span:nth-child(-n+3) {
@@ -748,6 +751,8 @@ textarea { resize: vertical; }
   display: inline-flex;
   grid-column: 1 / span 2;
   grid-row: 4;
+  box-sizing: border-box;
+  inline-size: calc(var(--room-no-width) + var(--room-floor-width));
   align-items: center;
   gap: 6px;
   color: var(--muted);
