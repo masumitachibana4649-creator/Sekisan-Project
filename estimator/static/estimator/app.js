@@ -109,20 +109,20 @@ function appendManualRoomPreview(floor, roomName) {
       <input class="room-exclude-checkbox" type="checkbox" value="1" data-new-room-exclude>
       <span>集計対象外</span>
     </label>
-    <strong class="room-sub-label">面積(m2)</strong>
-    <span class="room-measure-cell"><input name="new_room_east_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
-    <span class="room-measure-cell"><input name="new_room_west_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
-    <span class="room-measure-cell"><input name="new_room_south_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
-    <span class="room-measure-cell"><input name="new_room_north_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
-    <span class="room-measure-cell"><input name="new_room_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
-    <span class="room-total-spacer"></span>
-    <strong class="room-sub-label">開口部(m2)</strong>
+    <strong class="room-sub-label room-area-label">面積(m2)</strong>
+    <span class="room-measure-cell room-area-measure"><input name="new_room_east_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell room-area-measure"><input name="new_room_west_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell room-area-measure"><input name="new_room_south_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell room-area-measure"><input name="new_room_north_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-measure-cell room-area-measure"><input name="new_room_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
+    <span class="room-total-spacer room-area-spacer"></span>
+    <strong class="room-sub-label room-opening-label">開口部(m2)</strong>
     <span class="room-measure-cell"><input name="new_room_east_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
     <span class="room-measure-cell"><input name="new_room_west_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
     <span class="room-measure-cell"><input name="new_room_south_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
     <span class="room-measure-cell"><input name="new_room_north_opening_area_m2" type="number" step="0.01" min="0" value="0.00"></span>
     <span class="room-measure-cell"></span>
-    <span class="room-total-spacer"></span>
+    <span class="room-total-spacer room-opening-spacer"></span>
   `;
   roomDetailBody.append(row);
   const firstInput = row.querySelector('input[name="new_room_name"]');

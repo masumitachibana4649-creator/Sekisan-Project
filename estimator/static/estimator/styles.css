@@ -572,6 +572,10 @@ textarea { resize: vertical; }
 }
 
 .result-table {
+  --room-no-width: 46px;
+  --room-floor-width: 58px;
+  --room-name-width: 170px;
+  --room-pinned-width: calc(var(--room-no-width) + var(--room-floor-width) + var(--room-name-width));
   max-height: 620px;
 }
 
@@ -595,8 +599,8 @@ textarea { resize: vertical; }
 .result-row,
 .room-detail-group {
   display: grid;
-  grid-template-columns: max-content max-content minmax(4em, 1.1fr) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
-  column-gap: 1em;
+  grid-template-columns: var(--room-no-width) var(--room-floor-width) var(--room-name-width) repeat(5, minmax(140px, 1fr)) minmax(98px, 0.8fr) minmax(520px, 3.6fr);
+  column-gap: 0;
   row-gap: 10px;
   min-width: 1720px;
   align-items: start;
@@ -613,10 +617,16 @@ textarea { resize: vertical; }
 .result-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 4;
   background: var(--panel);
   min-width: 1720px;
-  column-gap: 1em;
+}
+
+.result-head span,
+.room-detail-group > span,
+.room-detail-group > strong,
+.room-detail-group > label {
+  padding-inline: 0.5em;
 }
 
 .result-head span:nth-child(n+4):not(:last-child) {
@@ -633,6 +643,7 @@ textarea { resize: vertical; }
 .room-detail-group {
   margin-top: 10px;
   row-gap: 6px;
+  background: #fff;
 }
 
 .room-wallpaper-cell select {
@@ -655,15 +666,49 @@ textarea { resize: vertical; }
   overflow-wrap: anywhere;
 }
 
+.result-head span:nth-child(-n+3),
+.room-no-cell,
+.room-floor-cell,
+.room-name-cell,
+.room-sub-label {
+  position: sticky;
+  z-index: 2;
+  background: inherit;
+}
+
+.result-head span:nth-child(1),
+.room-no-cell {
+  left: 0;
+}
+
+.result-head span:nth-child(2),
+.room-floor-cell {
+  left: var(--room-no-width);
+}
+
+.result-head span:nth-child(3),
+.room-name-cell {
+  left: calc(var(--room-no-width) + var(--room-floor-width));
+}
+
+.room-sub-label {
+  left: 0;
+}
+
+.result-head span:nth-child(-n+3) {
+  z-index: 5;
+}
+
 .room-sub-label {
   grid-column: 1 / span 3;
+  box-sizing: border-box;
+  inline-size: var(--room-pinned-width);
   color: var(--muted);
   font-size: 13px;
   text-align: right;
 }
 
 .room-area-label {
-  grid-column: 3;
   grid-row: 2;
 }
 
@@ -704,7 +749,7 @@ textarea { resize: vertical; }
 .room-exclude-cell {
   display: inline-flex;
   grid-column: 1 / span 2;
-  grid-row: 2;
+  grid-row: 4;
   align-items: center;
   gap: 6px;
   color: var(--muted);
@@ -832,12 +877,19 @@ textarea { resize: vertical; }
 }
 
 .memo-box {
-  margin: 0 0 18px;
+  margin: 18px 0 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f7f5ef;
   color: var(--muted);
+}
+
+.memo-box strong {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: 16px;
 }
 
 .memo-box p {

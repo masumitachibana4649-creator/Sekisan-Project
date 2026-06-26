@@ -85,20 +85,6 @@
       {% endif %}
     </div>
   </div>
-  {% if project.memo or project.last_calculation_seconds is not None %}
-    <div class="memo-box">
-      <p>解析状態：{{ project.get_analysis_status_display }}{% if project.analysis_model %} / モデル：{{ project.analysis_model }}{% endif %}</p>
-      {% if project.last_calculation_seconds is not None %}
-        <p>計算時間：{{ project.last_calculation_seconds }}秒</p>
-      {% endif %}
-      {% if project.analysis_error_message %}
-        <p>失敗理由：{{ project.analysis_error_message }}</p>
-      {% endif %}
-      {% if project.memo %}
-        <p>{{ project.memo|sentence_breaks }}</p>
-      {% endif %}
-    </div>
-  {% endif %}
   {% if has_estimated_openings %}
     <p class="estimate-note">青文字は展開図・平面図の縮尺と既知寸法からの推定値なので注意</p>
   {% endif %}
@@ -225,6 +211,21 @@
     {% endfor %}
     </div>
   </div>
+  {% if project.memo or project.last_calculation_seconds is not None %}
+    <div class="memo-box">
+      <strong>メモ</strong>
+      <p>解析状態：{{ project.get_analysis_status_display }}{% if project.analysis_model %} / モデル：{{ project.analysis_model }}{% endif %}</p>
+      {% if project.last_calculation_seconds is not None %}
+        <p>計算時間：{{ project.last_calculation_seconds }}秒</p>
+      {% endif %}
+      {% if project.analysis_error_message %}
+        <p>失敗理由：{{ project.analysis_error_message }}</p>
+      {% endif %}
+      {% if project.memo %}
+        <p>{{ project.memo|sentence_breaks }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
   {% if edit_mode and rooms %}
     <div class="room-add-actions">
       <button class="secondary-action" type="button" data-open-add-room>部屋追加</button>

@@ -424,8 +424,8 @@ class WallpaperEstimateTests(TestCase):
         self.assertEqual(str(sentence_breaks("入力メモです。\nPDF読取説明です。")), "入力メモです。<br><br>PDF読取説明です。<br>")
         self.assertEqual(str(room_note("根拠: 図面。AI信頼度: 0.82")), "根拠: 図面。<br>AI信頼度: 82%")
 
-    def test_project_detail_shows_entered_memo_without_fixed_title(self):
-        """project detail shows entered memo without fixed titleを検証する。"""
+    def test_project_detail_shows_entered_memo_below_room_table(self):
+        """project detail shows entered memo below room tableを検証する。"""
         self.client.force_login(self.user)
         project = Project.objects.create(
             name="メモ表示テスト",
@@ -439,7 +439,11 @@ class WallpaperEstimateTests(TestCase):
         self.assertContains(response, "計算時間：219秒")
         self.assertContains(response, "解析状態：未実行")
         self.assertContains(response, "入力した内容です。<br><br>PDF読取説明です。<br>", html=False)
-        self.assertNotContains(response, "<strong>メモ</strong>", html=False)
+        self.assertContains(response, "<strong>メモ</strong>", html=True)
+        self.assertLess(
+            response.content.decode().index('class="result-table"'),
+            response.content.decode().index('class="memo-box"'),
+        )
 
     def test_project_explicit_table_pages_uses_page_fields(self):
         """明示指定した表ページをAI読取対象候補として組み立てる。"""
