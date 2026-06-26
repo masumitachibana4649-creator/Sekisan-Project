@@ -127,7 +127,7 @@
       <div class="result-head">
         <span>No</span><span>階</span><span>部屋名</span><span>1面</span><span>2面</span><span>3面</span><span>4面</span><span>天井</span><span>面積/本数</span><span>備考</span>
       </div>
-      <div class="result-body" data-room-detail-body>
+      <div class="result-body" data-room-detail-body data-opening-label="開口部(m2)">
       {% for room in rooms %}
         <div class="room-detail-group {% if room.excluded_from_summary %}is-summary-excluded{% endif %}">
         <strong class="room-no-cell">{{ forloop.counter }}</strong>
@@ -188,26 +188,31 @@
             {{ room.ceiling_wallpaper_no }}：{{ room.ceiling_wallpaper_name }}
           {% endif %}
         </span>
-        <span class="room-total-cell">{{ room.total_area|floatformat:2 }} m2<br>{{ room.rolls_required }} 本</span>
-        <span class="room-note-cell">{{ room.note|room_note }}</span>
-        <label class="room-exclude-cell">
+        <span class="room-total-cell">{{ room.total_area|floatformat:3 }} m2<br>{{ room.rolls_required }} 本</span>
+        <span class="room-note-cell" style="grid-row: 1 / span {{ room.detail_note_span }};">{{ room.note|room_note }}</span>
+        <label class="room-exclude-cell" style="grid-row: {{ room.detail_exclude_row }};">
           <input class="room-exclude-checkbox" type="checkbox" name="room_{{ room.pk }}_excluded_from_summary" value="1" {% if room.excluded_from_summary %}checked{% endif %} {% if not edit_mode %}disabled{% endif %}>
           <span>集計対象外</span>
         </label>
-        <strong class="room-sub-label room-area-label">面積(m2)</strong>
-        <span class="room-measure-cell room-area-measure">{% if edit_mode %}<input name="room_{{ room.pk }}_east_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.east_surface_area_m2 }}">{% else %}{{ room.east_surface_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell room-area-measure">{% if edit_mode %}<input name="room_{{ room.pk }}_west_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.west_surface_area_m2 }}">{% else %}{{ room.west_surface_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell room-area-measure">{% if edit_mode %}<input name="room_{{ room.pk }}_south_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.south_surface_area_m2 }}">{% else %}{{ room.south_surface_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell room-area-measure">{% if edit_mode %}<input name="room_{{ room.pk }}_north_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.north_surface_area_m2 }}">{% else %}{{ room.north_surface_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell room-area-measure">{% if edit_mode %}<input name="room_{{ room.pk }}_ceiling_surface_area_m2" type="number" step="0.01" min="0" value="{{ room.ceiling_surface_area_m2 }}">{% else %}{{ room.ceiling_surface_area_m2 }}{% endif %}</span>
-        <span class="room-total-spacer room-area-spacer"></span>
-        <strong class="room-sub-label room-opening-label">開口部(m2)</strong>
-        <span class="room-measure-cell {% if room.east_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.east_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_east_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.east_opening_area_m2 }}">{% else %}{{ room.east_opening_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell {% if room.west_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.west_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_west_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.west_opening_area_m2 }}">{% else %}{{ room.west_opening_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell {% if room.south_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.south_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_south_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.south_opening_area_m2 }}">{% else %}{{ room.south_opening_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell {% if room.north_opening_area_m2 > 0 and "推定" in room.note %}estimated-value{% endif %}">{% if edit_mode %}<input {% if room.north_opening_area_m2 > 0 and "推定" in room.note %}class="estimated-value"{% endif %} name="room_{{ room.pk }}_north_opening_area_m2" type="number" step="0.01" min="0" value="{{ room.north_opening_area_m2 }}">{% else %}{{ room.north_opening_area_m2 }}{% endif %}</span>
-        <span class="room-measure-cell"></span>
-        <span class="room-total-spacer room-opening-spacer"></span>
+        <input type="hidden" name="room_{{ room.pk }}_opening_count" value="{{ room.opening_count }}" data-opening-count>
+        {% for row in room.detail_measure_rows %}
+          <strong class="room-sub-label" style="grid-row: {{ row.grid_row }};" {% if row.opening_sequence == 1 and row.kind == "opening-area" %}data-legacy-label="開口部(m2)"{% endif %}>{{ row.label }}</strong>
+          {% for cell in row.cells %}
+            <span class="room-measure-cell {% if cell.blank %}is-blank{% endif %}{% if cell.estimated %} estimated-value{% endif %}" style="grid-row: {{ row.grid_row }};">
+              {% if edit_mode and cell.editable %}
+                <input name="{{ cell.name }}" type="number" step="0.001" min="0" value="{{ cell.value|floatformat:3 }}" data-measure-input>
+              {% elif cell.blank %}
+              {% else %}
+                {{ cell.value|floatformat:3 }}
+              {% endif %}
+            </span>
+            {% if cell.estimated %}<!-- class="room-measure-cell estimated-value">{{ cell.value|floatformat:0 }} -->{% endif %}
+          {% endfor %}
+          <span class="room-total-spacer" style="grid-row: {{ row.grid_row }};"></span>
+        {% endfor %}
+        {% if edit_mode %}
+          <button class="room-opening-add-button secondary-action" type="button" style="grid-row: {{ room.detail_add_opening_row }};" data-add-opening>開口部追加</button>
+        {% endif %}
         </div>
       {% empty %}
         <div class="empty-result">

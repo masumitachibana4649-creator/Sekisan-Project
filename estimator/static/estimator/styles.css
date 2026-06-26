@@ -793,6 +793,10 @@ textarea { resize: vertical; }
   padding: 8px 10px;
 }
 
+.room-measure-cell.is-blank {
+  min-height: 1px;
+}
+
 .room-note-cell {
   grid-column: 10;
   grid-row: 1 / span 3;
@@ -820,6 +824,14 @@ textarea { resize: vertical; }
 .room-exclude-cell input {
   width: auto;
   min-height: auto;
+}
+
+.room-opening-add-button {
+  grid-column: 1 / span 3;
+  justify-self: end;
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: 13px;
 }
 
 .room-total-cell {

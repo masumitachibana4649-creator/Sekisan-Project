@@ -115,7 +115,7 @@ ANALYSIS_PROMPT_TARGETS = """抽出対象:
 - 天井高 height_m
 - 窓・ドアなどの開口部面積 opening_area_m2
 - 天井面積 ceiling_area_m2
-- 1面〜4面ごとの壁面積・開口部面積 wall_surfaces"""
+- 1面〜4面ごとの壁面積・開口部情報 wall_surfaces"""
 
 ANALYSIS_PROMPT_RULES = """ルール:
 - 回答内の文章は、warnings と evidence を含めて必ず日本語で書いてください。
@@ -146,7 +146,8 @@ ANALYSIS_PROMPT_RULES = """ルール:
 - wall_surfaces は face_1, face_2, face_3, face_4 の4面を必ず返してください。
 - 展開図が「1面」「2面」「3面」「4面」の表記なら、そのまま face_1〜face_4 に対応させてください。
 - 展開図が「A」「B」「C」「D」の表記なら、A=face_1、B=face_2、C=face_3、D=face_4 と読み替えてください。
-- wall_surfaces の width_m は展開図に書かれたその面の壁幅、surface_area_m2 は壁幅×天井高で計算した開口部を差し引く前の壁面積、opening_area_m2 はその面の開口部面積にしてください。
+- wall_surfaces の width_m は展開図に書かれたその面の壁幅、surface_area_m2 は壁幅×天井高で計算した開口部を差し引く前の壁面積、opening_area_m2 はその面の開口部面積合計にしてください。
+- wall_surfaces の openings は、その面の開口部ごとに width_m、height_m、area_m2 を返してください。開口部がない面は空配列にしてください。
 - 例: 展開図に「1,592.5」、天井高が2.4mの場合、width_m=1.5925、surface_area_m2=3.82 としてください。surface_area_m2 に天井高 2.4 をそのまま入れないでください。
 - 展開図の面番号と部屋名の対応が不確かな場合は、根拠を evidence に書いて confidence を下げてください。
 - どうしても方向別の割り当てが不確かな場合は、合計値を均等配分せず、読めた壁面に配分して confidence を下げてください。
@@ -534,14 +535,25 @@ def _analysis_schema():
     Returns:
         AI解析応答のJSON Schema。
     """
+    opening_schema = {
+        "type": "object",
+        "properties": {
+            "width_m": {"type": "number", "minimum": 0},
+            "height_m": {"type": "number", "minimum": 0},
+            "area_m2": {"type": "number", "minimum": 0},
+        },
+        "required": ["width_m", "height_m", "area_m2"],
+        "additionalProperties": False,
+    }
     surface_schema = {
         "type": "object",
         "properties": {
             "width_m": {"type": "number", "minimum": 0},
             "surface_area_m2": {"type": "number", "minimum": 0},
             "opening_area_m2": {"type": "number", "minimum": 0},
+            "openings": {"type": "array", "items": opening_schema},
         },
-        "required": ["width_m", "surface_area_m2", "opening_area_m2"],
+        "required": ["width_m", "surface_area_m2", "opening_area_m2", "openings"],
         "additionalProperties": False,
     }
     wall_surfaces_schema = {
@@ -680,8 +692,25 @@ def _wall_surfaces_from_ai(value):
             "width_m": _decimal_from_ai(surface.get("width_m"), "0"),
             "surface_area_m2": _decimal_from_ai(surface.get("surface_area_m2"), "0"),
             "opening_area_m2": _decimal_from_ai(surface.get("opening_area_m2"), "0"),
+            "openings": _openings_from_ai(surface.get("openings")),
         }
     return surfaces
+
+
+def _openings_from_ai(value):
+    """AI応答の開口部一覧をアプリ内部形式へ変換する。"""
+    if not isinstance(value, list):
+        return []
+    openings = []
+    for opening in value:
+        if not isinstance(opening, dict):
+            continue
+        openings.append({
+            "width_m": _decimal_from_ai(opening.get("width_m"), "0"),
+            "height_m": _decimal_from_ai(opening.get("height_m"), "0"),
+            "area_m2": _decimal_from_ai(opening.get("area_m2"), "0"),
+        })
+    return openings
 
 
 def _validate_room_extraction(

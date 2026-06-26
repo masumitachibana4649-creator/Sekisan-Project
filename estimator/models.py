@@ -460,20 +460,30 @@ class Room(models.Model):
     name = models.CharField("部屋名", max_length=80)
     source_type = models.CharField("部屋追加区分", max_length=16, choices=ROOM_SOURCE_CHOICES, default=ROOM_SOURCE_AI)
     excluded_from_summary = models.BooleanField("集計対象外", default=False)
-    perimeter_m = models.DecimalField("周長(m)", max_digits=7, decimal_places=2)
-    height_m = models.DecimalField("天井高(m)", max_digits=5, decimal_places=2, default=Decimal("2.4"))
-    opening_area_m2 = models.DecimalField("開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    ceiling_area_m2 = models.DecimalField("天井面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    perimeter_m = models.DecimalField("周長(m)", max_digits=8, decimal_places=3)
+    height_m = models.DecimalField("天井高(m)", max_digits=6, decimal_places=3, default=Decimal("2.4"))
+    opening_area_m2 = models.DecimalField("開口部面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    ceiling_area_m2 = models.DecimalField("天井面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
     note = models.CharField("備考", max_length=160, blank=True)
-    east_surface_area_m2 = models.DecimalField("東壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    west_surface_area_m2 = models.DecimalField("西壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    south_surface_area_m2 = models.DecimalField("南壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    north_surface_area_m2 = models.DecimalField("北壁面 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    ceiling_surface_area_m2 = models.DecimalField("天井 面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    east_opening_area_m2 = models.DecimalField("東壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    west_opening_area_m2 = models.DecimalField("西壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    south_opening_area_m2 = models.DecimalField("南壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
-    north_opening_area_m2 = models.DecimalField("北壁面 開口部面積(m2)", max_digits=7, decimal_places=2, default=Decimal("0"))
+    east_surface_area_m2 = models.DecimalField("東壁面 面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    east_surface_width_m = models.DecimalField("東壁面 幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    east_surface_height_m = models.DecimalField("東壁面 高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    west_surface_area_m2 = models.DecimalField("西壁面 面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    west_surface_width_m = models.DecimalField("西壁面 幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    west_surface_height_m = models.DecimalField("西壁面 高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    south_surface_area_m2 = models.DecimalField("南壁面 面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    south_surface_width_m = models.DecimalField("南壁面 幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    south_surface_height_m = models.DecimalField("南壁面 高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    north_surface_area_m2 = models.DecimalField("北壁面 面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    north_surface_width_m = models.DecimalField("北壁面 幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    north_surface_height_m = models.DecimalField("北壁面 高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    ceiling_surface_area_m2 = models.DecimalField("天井 面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    ceiling_surface_width_m = models.DecimalField("天井 幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    ceiling_surface_height_m = models.DecimalField("天井 高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    east_opening_area_m2 = models.DecimalField("東壁面 開口部面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    west_opening_area_m2 = models.DecimalField("西壁面 開口部面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    south_opening_area_m2 = models.DecimalField("南壁面 開口部面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    north_opening_area_m2 = models.DecimalField("北壁面 開口部面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
     east_wallpaper_no = models.CharField("東壁面 壁紙No.", max_length=3, default="001")
     east_wallpaper_name = models.CharField("東壁面 壁紙名称", max_length=80, default="標準壁紙")
     east_roll_width_m = models.DecimalField("東壁面 ロール幅(m)", max_digits=5, decimal_places=2, default=Decimal("0.92"))
@@ -690,6 +700,13 @@ class Room(models.Model):
         opening_area = getattr(self, f"{field}_opening_area_m2")
         return max(surface_area - opening_area, Decimal("0"))
 
+    def surface_openings_for(self, field):
+        """指定面に紐づく開口部一覧を返す。"""
+        prefetched = getattr(self, "prefetched_openings", None)
+        if prefetched is not None:
+            return [opening for opening in prefetched if opening.surface == field]
+        return list(self.openings.filter(surface=field))
+
     @property
     def wallpaper_area(self):
         """壁紙無しを除いた施工面積を返す。
@@ -804,15 +821,20 @@ class Room(models.Model):
         setattr(self, f"{field}_unit_price_per_roll", wallpaper.unit_price_per_roll)
 
     def set_default_surface_measurements(self):
-        """周長・天井高・開口部から各面の初期面積を設定する。"""
+        """周長・天井高・開口部から各面の初期寸法と面積を設定する。"""
         wall_gross_area = self.perimeter_m * self.height_m
         wall_surface_area = wall_gross_area / Decimal("4")
         wall_opening_area = self.opening_area_m2 / Decimal("4")
+        wall_width = self.perimeter_m / Decimal("4") if self.perimeter_m > 0 else Decimal("0")
         for field, _label, surface_type in SURFACE_FIELDS:
             if surface_type == "ceiling":
                 setattr(self, f"{field}_surface_area_m2", self.ceiling_area_m2)
+                setattr(self, f"{field}_surface_width_m", self.ceiling_area_m2)
+                setattr(self, f"{field}_surface_height_m", Decimal("1") if self.ceiling_area_m2 > 0 else Decimal("0"))
             else:
                 setattr(self, f"{field}_surface_area_m2", wall_surface_area)
+                setattr(self, f"{field}_surface_width_m", wall_width)
+                setattr(self, f"{field}_surface_height_m", self.height_m)
                 setattr(self, f"{field}_opening_area_m2", wall_opening_area)
 
     def sync_totals_from_surface_measurements(self):
@@ -822,6 +844,47 @@ class Room(models.Model):
             Decimal("0"),
         )
         self.ceiling_area_m2 = self.ceiling_surface_area_m2
+
+    def sync_measurements_from_dimensions(self):
+        """幅・高さと開口部テーブルから面積系の保存値を同期する。"""
+        for field, _label, _surface_type in SURFACE_FIELDS:
+            width = getattr(self, f"{field}_surface_width_m")
+            height = getattr(self, f"{field}_surface_height_m")
+            setattr(self, f"{field}_surface_area_m2", _quantize_measurement(width * height))
+        for field, _label, surface_type in SURFACE_FIELDS:
+            if surface_type != "wall":
+                continue
+            opening_area = sum(
+                (opening.area_m2 for opening in self.surface_openings_for(field)),
+                Decimal("0"),
+            )
+            setattr(self, f"{field}_opening_area_m2", _quantize_measurement(opening_area))
+        self.sync_totals_from_surface_measurements()
+
+
+class RoomSurfaceOpening(models.Model):
+    """部屋の各面に属する開口部寸法を表すモデル。"""
+    room = models.ForeignKey(Room, related_name="openings", on_delete=models.CASCADE)
+    surface = models.CharField("面", max_length=12)
+    sequence = models.PositiveSmallIntegerField("開口部番号")
+    width_m = models.DecimalField("幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    height_m = models.DecimalField("高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
+    area_m2 = models.DecimalField("面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
+
+    class Meta:
+        """モデルやフォームのメタ情報を定義する。"""
+        ordering = ["room_id", "surface", "sequence"]
+        unique_together = ("room", "surface", "sequence")
+        verbose_name = "開口部"
+        verbose_name_plural = "開口部"
+
+    def __str__(self):
+        """画面表示用の文字列表現を返す。"""
+        return f"{self.room} / {self.surface} 開口部{self.sequence}"
+
+    def sync_area_from_dimensions(self):
+        """幅と高さから開口部面積を同期する。"""
+        self.area_m2 = _quantize_measurement(self.width_m * self.height_m)
 
 
 def _normalize_code(value):
@@ -838,6 +901,17 @@ def _normalize_code(value):
     except ValueError:
         number = 0
     return f"{max(0, min(number, 999)):03d}"
+
+
+def _quantize_measurement(value, max_value=Decimal("99999.999")):
+    """寸法・面積を小数第3位へ丸める。"""
+    try:
+        measurement = Decimal(str(value if value is not None else "0")).quantize(Decimal("0.001"))
+    except Exception:
+        return Decimal("0.000")
+    if not measurement.is_finite() or measurement < 0:
+        return Decimal("0.000")
+    return min(measurement, max_value)
 
 
 def _ceil_rolls(required_area, roll_area):

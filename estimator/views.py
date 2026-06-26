@@ -9,6 +9,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 
 from django.contrib import messages
 from django.conf import settings
@@ -18,6 +19,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import close_old_connections
+from django.db.models import Prefetch
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -37,6 +39,7 @@ from .models import (
     EstimateDefaultSettings,
     Project,
     Room,
+    RoomSurfaceOpening,
     Wallpaper,
 )
 from .pdf_analysis import TABLE_PAGE_KEYWORDS, analyze_wallpaper_pdf
@@ -210,8 +213,15 @@ def project_detail(request, pk):
     Returns:
         案件詳細画面のHTTPレスポンス。
     """
-    project = _owned_project_or_403(request, Project.objects.prefetch_related("rooms"), pk)
-    rooms = project.rooms.all()
+    project = _owned_project_or_403(
+        request,
+        Project.objects.prefetch_related(
+            Prefetch("rooms", queryset=Room.objects.prefetch_related("openings")),
+        ),
+        pk,
+    )
+    rooms = list(project.rooms.all())
+    _prepare_room_detail_rows(rooms)
     has_estimated_openings = any(_is_estimated_opening(room) for room in rooms)
     has_ai_missing_rooms = any(room.source_type == ROOM_SOURCE_AI_MISSING for room in rooms)
     has_manual_rooms = any(room.source_type == ROOM_SOURCE_MANUAL for room in rooms)
@@ -288,18 +298,8 @@ def project_save_wallpapers(request, pk):
             wallpaper = wallpaper_map.get(selected_no)
             if wallpaper:
                 target_room.apply_wallpaper(field, wallpaper)
-            setattr(
-                target_room,
-                f"{field}_surface_area_m2",
-                _decimal(request.POST.get(f"room_{source_room_id}_{field}_surface_area_m2"), getattr(target_room, f"{field}_surface_area_m2")),
-            )
-            if _surface_type == "wall":
-                setattr(
-                    target_room,
-                    f"{field}_opening_area_m2",
-                    _decimal(request.POST.get(f"room_{source_room_id}_{field}_opening_area_m2"), getattr(target_room, f"{field}_opening_area_m2")),
-                )
-        target_room.sync_totals_from_surface_measurements()
+        _apply_room_measurement_post(request.POST, f"room_{source_room_id}", target_room)
+        target_room.sync_measurements_from_dimensions()
         target_room.save()
 
     _create_manual_rooms_from_post(
@@ -563,8 +563,17 @@ def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpa
         for field, _label, surface_type in SURFACE_FIELDS:
             if surface_type == "ceiling":
                 created.ceiling_surface_area_m2 = created.ceiling_area_m2
+                created.ceiling_surface_width_m = created.ceiling_area_m2
+                created.ceiling_surface_height_m = Decimal("1") if created.ceiling_area_m2 > 0 else Decimal("0")
                 continue
             surface = _wall_surface_value(room.wall_surfaces, field)
+            width = _room_measurement(surface.get("width_m", Decimal("0")), max_value=Decimal("99999.999"))
+            height = created.height_m if width > 0 else Decimal("0")
+            created_area = _wall_surface_area(surface, created.height_m)
+            created_width = width or (created_area if created_area > 0 else Decimal("0"))
+            created_height = height or (Decimal("1") if created_area > 0 else Decimal("0"))
+            setattr(created, f"{field}_surface_width_m", created_width)
+            setattr(created, f"{field}_surface_height_m", created_height)
             setattr(created, f"{field}_surface_area_m2", _wall_surface_area(surface, created.height_m))
             setattr(
                 created,
@@ -575,6 +584,10 @@ def _create_room_from_analysis(project, room, surface_wallpapers, default_wallpa
     else:
         created.set_default_surface_measurements()
     created.save()
+    if room.wall_surfaces:
+        _create_openings_from_analysis(created, room.wall_surfaces)
+        created.sync_measurements_from_dimensions()
+        created.save()
 
 
 def _create_empty_room(project, name, source_type, note, default_wallpaper, surface_wallpapers=None, ceiling_area_m2=Decimal("0")):
@@ -795,19 +808,204 @@ def _create_manual_rooms_from_post(post_data, project, default_wallpaper, wallpa
             wallpaper = wallpaper_map.get(selected_no)
             if wallpaper:
                 room.apply_wallpaper(field, wallpaper)
-            setattr(
-                room,
-                f"{field}_surface_area_m2",
-                _decimal(_at(post_data.getlist(f"new_room_{field}_surface_area_m2"), index), Decimal("0")),
-            )
-            if surface_type == "wall":
-                setattr(
-                    room,
-                    f"{field}_opening_area_m2",
-                    _decimal(_at(post_data.getlist(f"new_room_{field}_opening_area_m2"), index), Decimal("0")),
-                )
-        room.sync_totals_from_surface_measurements()
+        _apply_new_room_measurement_post(post_data, index, room)
+        room.sync_measurements_from_dimensions()
         room.save()
+
+
+def _apply_room_measurement_post(post_data, prefix, room):
+    """既存部屋の寸法POSTを部屋と開口部テーブルへ反映する。"""
+    for field, _label, _surface_type in SURFACE_FIELDS:
+        area_default = getattr(room, f"{field}_surface_area_m2")
+        width_default = getattr(room, f"{field}_surface_width_m")
+        height_default = getattr(room, f"{field}_surface_height_m")
+        width = _decimal(post_data.get(f"{prefix}_{field}_surface_width_m"), width_default)
+        height = _decimal(post_data.get(f"{prefix}_{field}_surface_height_m"), height_default)
+        if f"{prefix}_{field}_surface_width_m" not in post_data and f"{prefix}_{field}_surface_area_m2" in post_data:
+            area = _decimal(post_data.get(f"{prefix}_{field}_surface_area_m2"), area_default)
+            width = area
+            height = Decimal("1") if area > 0 else Decimal("0")
+        setattr(room, f"{field}_surface_width_m", _measurement(width))
+        setattr(room, f"{field}_surface_height_m", _measurement(height))
+
+    room.openings.all().delete()
+    _create_posted_openings(post_data, prefix, room)
+
+
+def _apply_new_room_measurement_post(post_data, index, room):
+    """手動追加部屋の寸法POSTを部屋と開口部テーブルへ反映する。"""
+    for field, _label, _surface_type in SURFACE_FIELDS:
+        width = _decimal(_at(post_data.getlist(f"new_room_{field}_surface_width_m"), index), Decimal("0"))
+        height = _decimal(_at(post_data.getlist(f"new_room_{field}_surface_height_m"), index), Decimal("0"))
+        if not width and not height:
+            area = _decimal(_at(post_data.getlist(f"new_room_{field}_surface_area_m2"), index), Decimal("0"))
+            width = area
+            height = Decimal("1") if area > 0 else Decimal("0")
+        setattr(room, f"{field}_surface_width_m", _measurement(width))
+        setattr(room, f"{field}_surface_height_m", _measurement(height))
+
+    max_count = int(_decimal(_at(post_data.getlist("new_room_opening_count"), index), Decimal("0")))
+    for sequence in range(1, max_count + 1):
+        for field, _label, surface_type in SURFACE_FIELDS:
+            if surface_type != "wall":
+                continue
+            width = _decimal(_at(post_data.getlist(f"new_room_{field}_opening_{sequence}_width_m"), index), Decimal("0"))
+            height = _decimal(_at(post_data.getlist(f"new_room_{field}_opening_{sequence}_height_m"), index), Decimal("0"))
+            if width <= 0 and height <= 0:
+                continue
+            opening = RoomSurfaceOpening(room=room, surface=field, sequence=sequence, width_m=_measurement(width), height_m=_measurement(height))
+            opening.sync_area_from_dimensions()
+            opening.save()
+    if max_count == 0:
+        _create_legacy_new_room_openings(post_data, index, room)
+
+
+def _create_posted_openings(post_data, prefix, room):
+    """POSTされた開口部寸法から開口部レコードを作成する。"""
+    max_count = int(_decimal(post_data.get(f"{prefix}_opening_count"), Decimal("0")))
+    for sequence in range(1, max_count + 1):
+        for field, _label, surface_type in SURFACE_FIELDS:
+            if surface_type != "wall":
+                continue
+            width = _decimal(post_data.get(f"{prefix}_{field}_opening_{sequence}_width_m"), Decimal("0"))
+            height = _decimal(post_data.get(f"{prefix}_{field}_opening_{sequence}_height_m"), Decimal("0"))
+            if width <= 0 and height <= 0:
+                continue
+            opening = RoomSurfaceOpening(room=room, surface=field, sequence=sequence, width_m=_measurement(width), height_m=_measurement(height))
+            opening.sync_area_from_dimensions()
+            opening.save()
+    if max_count == 0:
+        _create_legacy_room_openings(post_data, prefix, room)
+
+
+def _create_legacy_room_openings(post_data, prefix, room):
+    """旧フォームの開口部面積POSTを開口部1へ変換する。"""
+    for field, _label, surface_type in SURFACE_FIELDS:
+        if surface_type != "wall":
+            continue
+        area = _decimal(post_data.get(f"{prefix}_{field}_opening_area_m2"), Decimal("0"))
+        if area <= 0:
+            continue
+        opening = RoomSurfaceOpening(room=room, surface=field, sequence=1, width_m=_measurement(area), height_m=Decimal("1.000"))
+        opening.sync_area_from_dimensions()
+        opening.save()
+
+
+def _create_legacy_new_room_openings(post_data, index, room):
+    """旧フォームの手動追加開口部面積POSTを開口部1へ変換する。"""
+    for field, _label, surface_type in SURFACE_FIELDS:
+        if surface_type != "wall":
+            continue
+        area = _decimal(_at(post_data.getlist(f"new_room_{field}_opening_area_m2"), index), Decimal("0"))
+        if area <= 0:
+            continue
+        opening = RoomSurfaceOpening(room=room, surface=field, sequence=1, width_m=_measurement(area), height_m=Decimal("1.000"))
+        opening.sync_area_from_dimensions()
+        opening.save()
+
+
+def _prepare_room_detail_rows(rooms):
+    """部屋別明細の可変寸法行をテンプレート用に組み立てる。"""
+    for room in rooms:
+        openings_by_surface = {field: {} for field, _label, _surface_type in SURFACE_FIELDS}
+        for opening in room.openings.all():
+            openings_by_surface.setdefault(opening.surface, {})[opening.sequence] = opening
+        for field, _label, surface_type in SURFACE_FIELDS:
+            if surface_type != "wall" or openings_by_surface.get(field):
+                continue
+            legacy_area = getattr(room, f"{field}_opening_area_m2")
+            if legacy_area > 0:
+                openings_by_surface[field][1] = SimpleNamespace(
+                    width_m=legacy_area,
+                    height_m=Decimal("1.000"),
+                    area_m2=legacy_area,
+                )
+        max_opening_count = max(
+            [max(openings.keys(), default=0) for openings in openings_by_surface.values()],
+            default=0,
+        )
+        rows = [
+            _surface_measure_row(room, "面積(m2)", "area", "surface_area_m2", editable=False),
+            _surface_measure_row(room, "幅(m)", "width", "surface_width_m", editable=True),
+            _surface_measure_row(room, "高(m)", "height", "surface_height_m", editable=True),
+        ]
+        for sequence in range(1, max_opening_count + 1):
+            rows.extend([
+                _opening_measure_row(room, openings_by_surface, sequence, f"開口部{sequence}(m2)", "area", editable=False),
+                _opening_measure_row(room, openings_by_surface, sequence, "幅(m)", "width", editable=True),
+                _opening_measure_row(room, openings_by_surface, sequence, "高(m)", "height", editable=True),
+            ])
+        for index, row in enumerate(rows, start=2):
+            row["grid_row"] = index
+        room.detail_measure_rows = rows
+        room.opening_count = max_opening_count
+        room.detail_note_span = len(rows) + 1
+        room.detail_exclude_row = len(rows) + 2
+        room.detail_add_opening_row = len(rows) + 3
+
+
+def _surface_measure_row(room, label, kind, field_suffix, editable):
+    """壁・天井の寸法行を作成する。"""
+    cells = []
+    for field, _surface_label, _surface_type in SURFACE_FIELDS:
+        cells.append({
+            "field": field,
+            "value": getattr(room, f"{field}_{field_suffix}"),
+            "name": f"room_{room.pk}_{field}_{field_suffix}",
+            "editable": editable,
+        })
+    return {"label": label, "kind": kind, "cells": cells}
+
+
+def _opening_measure_row(room, openings_by_surface, sequence, label, kind, editable):
+    """開口部の寸法行を作成する。"""
+    cells = []
+    for field, _surface_label, surface_type in SURFACE_FIELDS:
+        opening = openings_by_surface.get(field, {}).get(sequence)
+        if surface_type != "wall":
+            cells.append({"field": field, "value": "", "name": "", "editable": False, "blank": True})
+            continue
+        if kind == "area":
+            value = opening.area_m2 if opening else Decimal("0")
+            suffix = "area_m2"
+        elif kind == "width":
+            value = opening.width_m if opening else Decimal("0")
+            suffix = "width_m"
+        else:
+            value = opening.height_m if opening else Decimal("0")
+            suffix = "height_m"
+        cells.append({
+            "field": field,
+            "value": value,
+            "name": f"room_{room.pk}_{field}_opening_{sequence}_{suffix}",
+            "editable": editable,
+            "opening_sequence": sequence,
+            "estimated": kind == "area" and value > 0 and "推定" in room.note,
+        })
+    return {"label": label, "kind": f"opening-{kind}", "cells": cells, "opening_sequence": sequence}
+
+
+def _create_openings_from_analysis(room, wall_surfaces):
+    """AI解析の面別開口情報から開口部レコードを作成する。"""
+    for field, _label, surface_type in SURFACE_FIELDS:
+        if surface_type != "wall":
+            continue
+        surface = _wall_surface_value(wall_surfaces, field)
+        openings = surface.get("openings") or []
+        if not openings and surface.get("opening_area_m2", Decimal("0")) > 0:
+            openings = [{
+                "width_m": surface.get("opening_area_m2", Decimal("0")),
+                "height_m": Decimal("1"),
+                "area_m2": surface.get("opening_area_m2", Decimal("0")),
+            }]
+        for sequence, opening_data in enumerate(openings, start=1):
+            width = _measurement(opening_data.get("width_m", opening_data.get("area_m2", Decimal("0"))), max_value=Decimal("99999.990"))
+            height = _measurement(opening_data.get("height_m", Decimal("1") if width > 0 else Decimal("0")))
+            opening = RoomSurfaceOpening(room=room, surface=field, sequence=sequence, width_m=width, height_m=height)
+            opening.sync_area_from_dimensions()
+            if opening.area_m2 <= 0 and opening_data.get("area_m2", Decimal("0")) > 0:
+                opening.area_m2 = _measurement(opening_data.get("area_m2"), max_value=Decimal("99999.990"))
+            opening.save()
 
 
 def _wall_surface_value(wall_surfaces, field):
@@ -856,7 +1054,7 @@ def _room_measurement(value, max_value):
         0以上かつ最大値以下に正規化したDecimal値。
     """
     try:
-        measurement = Decimal(str(value if value is not None else "0")).quantize(Decimal("0.01"))
+        measurement = Decimal(str(value if value is not None else "0")).quantize(Decimal("0.001"))
     except Exception:
         return Decimal("0")
     if not measurement.is_finite() or measurement < 0:
@@ -1324,6 +1522,17 @@ def _decimal(value, default):
         return Decimal(default)
 
 
+def _measurement(value, max_value=Decimal("99999.999")):
+    """寸法・面積を小数第3位へ丸める。"""
+    try:
+        measurement = Decimal(str(value if value is not None else "0")).quantize(Decimal("0.001"))
+    except (InvalidOperation, TypeError):
+        return Decimal("0.000")
+    if not measurement.is_finite() or measurement < 0:
+        return Decimal("0.000")
+    return min(measurement, max_value)
+
+
 def _at(values, index):
     """一覧から指定位置の値を安全に取得する。
 
@@ -1338,15 +1547,15 @@ def _at(values, index):
 
 
 def _round(value):
-    """Decimal値を小数第2位へ丸める。
+    """Decimal値を小数第3位へ丸める。
 
     Args:
         value: 変換または正規化する値。
 
     Returns:
-        小数第2位で丸めたDecimal値。
+        小数第3位で丸めたDecimal値。
     """
-    return value.quantize(Decimal("0.01"))
+    return value.quantize(Decimal("0.001"))
 
 
 def _selectable_wallpapers():
@@ -1476,5 +1685,17 @@ def _clone_rooms(source_project, target_project):
     for source_room in source_project.rooms.all():
         values = {field_name: getattr(source_room, field_name) for field_name in field_names}
         target_room = Room.objects.create(project=target_project, **values)
+        openings = [
+            RoomSurfaceOpening(
+                room=target_room,
+                surface=opening.surface,
+                sequence=opening.sequence,
+                width_m=opening.width_m,
+                height_m=opening.height_m,
+                area_m2=opening.area_m2,
+            )
+            for opening in source_room.openings.all()
+        ]
+        RoomSurfaceOpening.objects.bulk_create(openings)
         room_map[source_room.pk] = target_room
     return room_map
