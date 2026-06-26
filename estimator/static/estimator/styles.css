@@ -567,7 +567,7 @@ input[type="number"] {
 textarea { resize: vertical; }
 .wide { grid-column: span 2; }
 
-.room-table, .result-table {
+.room-table {
   overflow-x: auto;
 }
 
@@ -577,13 +577,11 @@ textarea { resize: vertical; }
   --room-name-width: 170px;
   --room-pinned-width: calc(var(--room-no-width) + var(--room-floor-width) + var(--room-name-width));
   max-height: 620px;
+  overflow: auto;
 }
 
 .result-body {
   min-width: 1720px;
-  max-height: 560px;
-  overflow-x: hidden;
-  overflow-y: auto;
 }
 
 .room-head,
