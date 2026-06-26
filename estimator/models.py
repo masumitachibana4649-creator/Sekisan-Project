@@ -464,7 +464,7 @@ class Room(models.Model):
     height_m = models.DecimalField("天井高(m)", max_digits=6, decimal_places=3, default=Decimal("2.4"))
     opening_area_m2 = models.DecimalField("開口部面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
     ceiling_area_m2 = models.DecimalField("天井面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
-    note = models.CharField("備考", max_length=160, blank=True)
+    note = models.TextField("備考", blank=True)
     east_surface_area_m2 = models.DecimalField("東壁面 面積(m2)", max_digits=8, decimal_places=3, default=Decimal("0"))
     east_surface_width_m = models.DecimalField("東壁面 幅(m)", max_digits=8, decimal_places=3, default=Decimal("0"))
     east_surface_height_m = models.DecimalField("東壁面 高(m)", max_digits=8, decimal_places=3, default=Decimal("0"))

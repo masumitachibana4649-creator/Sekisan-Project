@@ -1337,7 +1337,8 @@ class WallpaperEstimateTests(TestCase):
 
         created = project.rooms.get()
         self.assertLessEqual(len(created.name), 80)
-        self.assertLessEqual(len(created.note), 160)
+        self.assertIn("長い備考", created.note)
+        self.assertGreater(len(created.note), 160)
         self.assertEqual(created.perimeter_m, Decimal("99999.99"))
         self.assertEqual(created.height_m, Decimal("999.99"))
         self.assertEqual(created.opening_area_m2, Decimal("99999.99"))
