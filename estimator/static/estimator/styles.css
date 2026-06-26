@@ -700,6 +700,20 @@ textarea { resize: vertical; }
   z-index: 5;
 }
 
+.result-head span:nth-child(1)::before,
+.room-no-cell::before,
+.room-sub-label::before,
+.room-exclude-cell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 100%;
+  bottom: 0;
+  inline-size: var(--room-grid-x-padding);
+  background: inherit;
+  pointer-events: none;
+}
+
 .room-sub-label {
   grid-column: 1 / span 3;
   box-sizing: border-box;
